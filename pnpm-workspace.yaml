@@ -1,0 +1,5 @@
+# Anchors pnpm's workspace root at this package. Without it pnpm walks up the
+# directory tree, finds an unrelated root above the checkout, and installs the
+# dependencies there instead of into this repo's node_modules.
+packages:
+  - .

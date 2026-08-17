@@ -1,0 +1,363 @@
+/*
+ * One stylesheet for both surfaces: the card and the panel share the same
+ * timeline rows and meta typography, and splitting them would duplicate every
+ * token. Colours are derived from `currentColor` throughout, so the plugin
+ * inherits whatever theme the shell is in without reading theme variables. The
+ * one exception is the floating panel's own fill: it has to be opaque to sit
+ * over the conversation, which no amount of `currentColor` can produce.
+ */
+
+/* ── the tool card ── */
+
+.card {
+  margin: 2px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.card:hover {
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 600;
+}
+
+.dot {
+  flex: none;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  opacity: 0.72;
+  word-break: break-all;
+}
+
+.reply {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 5px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: pre-wrap;
+}
+
+.promptExcerpt {
+  margin-top: 2px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* ── shared disclosures ── */
+
+.disclosure summary {
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0.75;
+  user-select: none;
+}
+
+.disclosureText {
+  overflow: auto;
+  max-height: 320px;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
+.pre {
+  overflow: auto;
+  max-height: 240px;
+  margin: 4px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.85;
+}
+
+/* ── the floating panel ── */
+
+/*
+ * The `shell.overlay` layer is click-through (`pointer-events: none`) and its
+ * entries opt back in. This is the ONLY box the entry renders, so it is also the
+ * only region that can intercept a click: there is no backdrop, and the app
+ * underneath stays fully operable while the panel is open. `pointer-events` is
+ * restated here rather than relying on the layer's own `> *` rule, because that
+ * rule targets the framework's slot anchor, not this element.
+ *
+ * Position is absolute inside the layer, which spans the app frame — so the
+ * height cap is a fraction of the frame, and the body below scrolls internally
+ * instead of growing the panel off screen.
+ */
+.panel {
+  display: flex;
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  flex-direction: column;
+  /* The rounded corners clip the head/foot rules and the body's scrollbar. */
+  overflow: hidden;
+  width: min(420px, calc(100% - 32px));
+  min-height: 0;
+  max-height: min(60%, 560px);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base, canvas);
+  box-shadow: 0 8px 32px color-mix(in srgb, currentColor 22%, transparent);
+  font-size: 13px;
+  pointer-events: auto;
+  animation: panelIn 160ms var(--ds-ease-in-out, ease-out);
+}
+
+/* A narrow frame has no room for a floating column: the panel spans the width
+   and takes a smaller share of the height, so the conversation stays readable. */
+@media (max-width: 720px) {
+  .panel {
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: auto;
+    max-height: 52%;
+  }
+}
+
+@keyframes panelIn {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+
+/* The panel is informational; an entrance slide is decoration, so it goes. */
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
+
+/* Focus lands on the panel when it opens. Only a keyboard user needs to see
+   that, which is exactly what :focus-visible answers. */
+.panel:focus-visible,
+.panelClose:focus-visible {
+  outline: 2px solid color-mix(in srgb, currentColor 55%, transparent);
+  outline-offset: 2px;
+}
+
+.panelHead {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  font-weight: 600;
+}
+
+.panelClose {
+  margin-left: auto;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.panelClose:hover {
+  opacity: 1;
+}
+
+.panelMeta {
+  flex: none;
+  padding: 8px 14px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  opacity: 0.72;
+  word-break: break-all;
+}
+
+.panelBody {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  padding: 12px 14px;
+  line-height: 1.6;
+}
+
+.panelFoot {
+  flex: none;
+  padding: 8px 14px;
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  opacity: 0.72;
+}
+
+.sectionLabel {
+  margin: 12px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+.sectionLabel:first-child {
+  margin-top: 2px;
+}
+
+.panelText {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.hint {
+  opacity: 0.6;
+}
+
+.prompt {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px dashed color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  opacity: 0.8;
+}
+
+/* The dropped-event notice is deliberately loud: a timeline that quietly
+   starts in the middle is worse than one that says so. */
+.notice {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border-left: 2px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  font-size: 11px;
+}
+
+.errors {
+  padding: 6px 8px;
+  border-left: 2px solid color-mix(in srgb, currentColor 55%, transparent);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cardErrors {
+  font-size: 11px;
+  white-space: pre-wrap;
+  opacity: 0.9;
+}
+
+/* ── timeline ── */
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.rowTime {
+  flex: none;
+  width: 38px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  text-align: right;
+  opacity: 0.5;
+}
+
+.rowBody {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Reasoning is context, not content: readable but visibly secondary. */
+.reasoning {
+  font-style: italic;
+  opacity: 0.72;
+}
+
+.note {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.tool {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.toolName {
+  font-weight: 600;
+}
+
+.toolExit {
+  margin-left: 6px;
+  opacity: 0.7;
+}
+
+/* Files read as a distinct kind of fact from tool calls: a workspace mutation,
+   not a command. */
+.file {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 11px;
+}
+
+.fileChange {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: 10px;
+}
+
+.filePath {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+
+.rowError {
+  padding: 2px 6px;
+  border-left: 2px solid color-mix(in srgb, currentColor 55%, transparent);
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
