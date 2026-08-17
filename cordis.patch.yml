@@ -1,0 +1,6 @@
+# dsh-harness-call bundle patch: inserts the host plugin row.
+# The browser half loads through package.json's `dsh.client` declaration and
+# the "./client" export; this patch only owns the host side.
+- insert:
+    - id: dsh-harness-call
+      name: dsh-harness-call
