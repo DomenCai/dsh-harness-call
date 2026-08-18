@@ -12,7 +12,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { RunDetail, RunSummary } from '../shared/events.ts'
 import { SERVICE_KEY, type HarnessCallRemote } from '../shared/wire.ts'
 import type { RunStore } from './runs.ts'
@@ -26,6 +26,7 @@ export class HarnessCallRemoteService extends TypertRemoteService implements Har
   }
 
   /** Every known run, newest `startedAt` first. */
+  @Remote
   async list(): Promise<RunSummary[]> {
     return this.runs.list()
   }
@@ -36,6 +37,7 @@ export class HarnessCallRemoteService extends TypertRemoteService implements Har
    * @param sinceSeq - highest `seq` the caller already holds.
    * @returns the detail, or `null` when the run id is unknown.
    */
+  @Remote
   async get(runId: string, sinceSeq: number): Promise<RunDetail | null> {
     return this.runs.get(runId, sinceSeq)
   }

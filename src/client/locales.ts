@@ -17,6 +17,7 @@ const zh = {
   'cand.grok': '把这条消息委托给 Grok CLI，自动续接其最近会话',
 
   'card.starting': '启动中…',
+  'card.channelDown': '进度通道未接通',
   'card.running': '运行中',
   'card.elapsed': '{n}s',
   'card.events': '{n} 条事件',
@@ -39,6 +40,7 @@ const zh = {
   'panel.prompt': '发送的 prompt',
   'panel.noOutput': '暂无输出',
   'panel.waiting': '等待 harness 启动…',
+  'panel.channelDown': '进度通道未接通，卡片无法拉取实时过程',
   'panel.usageTurns': '{turns} 轮',
 
   'event.session': '会话',
@@ -66,6 +68,7 @@ const en: Record<LocaleKey, string> = {
   'cand.grok': 'Delegate this message to Grok CLI; continues its latest session',
 
   'card.starting': 'starting…',
+  'card.channelDown': 'progress channel is down',
   'card.running': 'running',
   'card.elapsed': '{n}s',
   'card.events': '{n} events',
@@ -88,6 +91,7 @@ const en: Record<LocaleKey, string> = {
   'panel.prompt': 'Prompt sent',
   'panel.noOutput': 'No output yet',
   'panel.waiting': 'Waiting for the harness to start…',
+  'panel.channelDown': 'Progress channel is down; the card cannot poll the live timeline',
   'panel.usageTurns': '{turns} turns',
 
   'event.session': 'session',

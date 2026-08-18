@@ -24,6 +24,19 @@ import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client';
 import type { RunDetail, RunSummary, StoredEvent } from '../shared/events.ts';
 import type { HarnessCallRemoteClient } from '../shared/wire.ts';
 /**
+ * Whether the browser half can talk to the host store.
+ *
+ * Distinct from an empty roster: a live call with no matching run is still
+ * "starting", but a channel that never mounted or whose `list()` keeps failing
+ * must not hide behind that same copy.
+ */
+export interface ChannelStatus {
+    /** The Remote namespace is mounted and at least one `list()` has succeeded. */
+    ready: boolean;
+    /** Last mount or poll failure; cleared on the next successful `list()`. */
+    error: string | undefined;
+}
+/**
  * The page-wide run feed: a shared roster subscription plus the focused-run
  * fetch. Both faces are stable function identities, so they can ride
  * `useSyncExternalStore` and `useCallback` deps without re-subscribing.
@@ -33,6 +46,13 @@ export interface RunFeed {
     subscribe: (listener: () => void) => () => void;
     /** Newest-first roster, as of the last SUCCESSFUL poll. */
     getSnapshot: () => readonly RunSummary[];
+    /** Channel liveness as of the last poll or mount report. */
+    getChannel: () => ChannelStatus;
+    /**
+     * Record a `$mount` failure so cards can show it before the first poll.
+     * A successful mount clears the error and lets the next poll mark `ready`.
+     */
+    reportMount: (error: string | undefined) => void;
     /**
      * One incremental slice of a run's timeline. Three answers, because the
      * caller has to tell "nothing new yet" from "there will never be anything":
@@ -64,6 +84,14 @@ export declare function createRunFeed(resolve: () => HarnessCallRemoteClient | u
  * @returns the roster snapshot.
  */
 export declare function useRoster(feed: RunFeed, active: boolean): readonly RunSummary[];
+/**
+ * Read the shared channel status, polling only while `active`.
+ *
+ * @param feed - the page feed.
+ * @param active - whether this surface still needs live data.
+ * @returns whether the Remote is up, and the last failure if any.
+ */
+export declare function useChannel(feed: RunFeed, active: boolean): ChannelStatus;
 /**
  * Locate a still-running card's run in the roster.
  *

@@ -1,6 +1,6 @@
 {
   "name": "dsh-harness-call",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Delegate work to external coding agents (Claude Code / Codex CLI / Grok CLI) from DeepSeek Harness: a model-facing harness_call tool, @claude/@codex/@grok mentions, live progress cards with a thinking/tool timeline, and a details side panel.",
   "license": "MIT",
   "type": "module",

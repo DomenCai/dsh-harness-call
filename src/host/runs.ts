@@ -120,12 +120,20 @@ interface RunRecord {
   deliveredSeq: number
 }
 
-/** Project the mutable record into a detached summary a poll can serialize safely. */
+/**
+ * Project the mutable record into a detached summary a poll can serialize safely.
+ *
+ * The Typert Gateway validates every result with `assertJsonValue`, which
+ * rejects an own property whose VALUE is `undefined` — so the optional fields
+ * are copied only when they are actually set. Spreading the record wholesale
+ * would ship `finishedAt: undefined` for every live run and the gateway would
+ * fail the whole `list()` call, leaving every card and panel staring at an
+ * empty roster while the host holds the data.
+ */
 function toSummary(record: RunRecord): RunSummary {
-  return {
+  const summary: RunSummary = {
     runId: record.runId,
     harness: record.harness,
-    callId: record.callId,
     label: record.label,
     phase: record.phase,
     mode: record.mode,
@@ -134,16 +142,37 @@ function toSummary(record: RunRecord): RunSummary {
     promptPreview: record.promptPreview,
     promptCharacters: record.promptCharacters,
     startedAt: record.startedAt,
-    finishedAt: record.finishedAt,
-    elapsedMs: record.elapsedMs,
-    ok: record.ok,
     errors: [...record.errors],
     eventCount: record.eventCount,
     droppedEvents: record.droppedEvents,
-    lastEventKind: record.lastEventKind,
-    costUsd: record.costUsd,
-    turns: record.turns,
   }
+  if (record.callId !== undefined) summary.callId = record.callId
+  if (record.finishedAt !== undefined) summary.finishedAt = record.finishedAt
+  if (record.elapsedMs !== undefined) summary.elapsedMs = record.elapsedMs
+  if (record.ok !== undefined) summary.ok = record.ok
+  if (record.lastEventKind !== undefined) summary.lastEventKind = record.lastEventKind
+  if (record.costUsd !== undefined) summary.costUsd = record.costUsd
+  if (record.turns !== undefined) summary.turns = record.turns
+  return summary
+}
+
+/**
+ * Copy one accepted event into its stored shape, keeping only DEFINED values.
+ *
+ * Adapters build events by habit (`{ kind: 'tool', name, input: frame.input }`),
+ * and a habit that names a key with an `undefined` value is invisible to the
+ * type system but fatal at the Remote boundary — same `assertJsonValue` rule
+ * as {@link toSummary}. The store is the one chokepoint every event crosses,
+ * so the guarantee is made here instead of in every adapter.
+ */
+function toStored(event: HarnessEvent, seq: number, at: number): StoredEvent {
+  const stored: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(event)) {
+    if (value !== undefined) stored[key] = value
+  }
+  stored['seq'] = seq
+  stored['at'] = at
+  return stored as StoredEvent
 }
 
 export class RunStore {
@@ -273,7 +302,7 @@ export class RunStore {
       // regardless of which event carries it.
       if (!mergeDelta(record, event)) {
         record.eventCount += 1
-        record.events.push({ ...event, seq: record.eventCount, at })
+        record.events.push(toStored(event, record.eventCount, at))
         if (record.events.length > this.options.maxEventsPerRun) {
           record.events.shift()
           record.droppedEvents += 1

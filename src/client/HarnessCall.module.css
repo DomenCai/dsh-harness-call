@@ -225,7 +225,8 @@
   opacity: 0.6;
 }
 
-.sectionLabel:first-child {
+.sectionLabel:first-child,
+.process:first-child > .sectionLabel {
   margin-top: 2px;
 }
 
@@ -360,4 +361,43 @@
   border-left: 2px solid color-mix(in srgb, currentColor 55%, transparent);
   border-radius: 0 4px 4px 0;
   background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+/* ── sent-bubble mention chips ──
+ *
+ * The conversation bubble wraps leftover text in a block-level MessageText
+ * <div>. Between two @mentions that leftover is just a space, so each chip
+ * lands on its own line. Flow the chip and its neighbouring text as inline;
+ * a real newline the user typed still breaks via white-space: pre-wrap.
+ */
+:global([data-ref-chip] + div),
+:global(div:has(+ [data-ref-chip])) {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+/* ── collapsible process ── */
+
+.process {
+  margin: 0;
+}
+
+.process > summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.process > summary::-webkit-details-marker {
+  display: none;
+}
+
+.process > summary::before {
+  content: '▸ ';
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.process[open] > summary::before {
+  content: '▾ ';
 }

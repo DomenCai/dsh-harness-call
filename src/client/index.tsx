@@ -64,17 +64,34 @@ export function apply(ctx: ClientContext): void {
    */
   let api: HarnessCallRemoteClient | undefined
 
+  const feed = createRunFeed(() => api)
+
   ctx.effect(async () => {
-    const dispose = await ctx.remote.$mount(HARNESS_CALL_CONTRIBUTION)
-    api = ctx.reflect.get(`remote.${SERVICE_KEY}`) as HarnessCallRemoteClient | undefined
-    if (api === undefined) throw new Error(`dsh-harness-call: the ${SERVICE_KEY} Remote namespace did not mount`)
-    return () => {
-      api = undefined
-      void dispose()
+    // Mount failures used to throw and kill this fiber, which unregistered the
+    // card itself and left the generic tool row with no explanation. Report
+    // them on the feed instead so a live card can say the channel is down.
+    try {
+      const dispose = await ctx.remote.$mount(HARNESS_CALL_CONTRIBUTION)
+      api = ctx.reflect.get(`remote.${SERVICE_KEY}`) as HarnessCallRemoteClient | undefined
+      if (api === undefined) {
+        feed.reportMount(`dsh-harness-call: the ${SERVICE_KEY} Remote namespace did not mount`)
+        return () => {
+          api = undefined
+          void dispose()
+        }
+      }
+      feed.reportMount(undefined)
+      return () => {
+        api = undefined
+        void dispose()
+      }
+    } catch (error) {
+      feed.reportMount(error instanceof Error ? error.message : String(error))
+      return () => {
+        api = undefined
+      }
     }
   }, 'dsh-harness-call: remote')
-
-  const feed = createRunFeed(() => api)
 
   ctx.effect(() => ctx.locale.register(LOCALE_NS, DICTIONARIES), 'dsh-harness-call: dictionaries')
   const t = ctx.locale.bind(LOCALE_NS)

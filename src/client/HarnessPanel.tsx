@@ -24,7 +24,7 @@ import type { StoredEvent } from '../shared/events.ts'
 import type { HarnessTranslate } from './contracts.ts'
 import css from './HarnessCall.module.css'
 import {
-  brief, matchRun, seconds, useRoster, useRunDetail,
+  brief, matchRun, seconds, useChannel, useRoster, useRunDetail,
   type HarnessResult, type RunFeed,
 } from './runs.ts'
 
@@ -143,7 +143,14 @@ export function HarnessPanel(props: {
    * resolves the same run on every later render.
    */
   const [found, setFound] = useState(false)
+  /**
+   * A finished card is opened to read the reply; a long timeline should not
+   * bury it. A live card starts open so the process is visible while it
+   * streams. Later toggles are kept even if the run settles with the panel up.
+   */
+  const [processOpen, setProcessOpen] = useState(result === undefined)
   const runs = useRoster(feed, searching && !found)
+  const channel = useChannel(feed, searching && !found)
   const run = searching ? matchRun(runs, target.callId, target.harness) : undefined
   const runId = result?.runId ?? run?.runId
   const view = useRunDetail(feed, runId, result !== undefined)
@@ -229,12 +236,25 @@ export function HarnessPanel(props: {
           ✕
         </button>
       </div>
-      <div className={css.panelMeta}>{meta.length > 0 ? meta.join(' · ') : t('panel.waiting')}</div>
+      <div className={css.panelMeta}>
+        {meta.length > 0
+          ? meta.join(' · ')
+          : searching && channel.error !== undefined
+            ? t('panel.channelDown')
+            : t('panel.waiting')}
+      </div>
       <div className={css.panelBody}>
+        {searching && channel.error !== undefined && (
+          <div className={css.rowError}>{channel.error}</div>
+        )}
         {dropped > 0 && <div className={css.notice}>{t('panel.dropped', { n: dropped })}</div>}
         {events.length > 0 && (
-          <>
-            <div className={css.sectionLabel}>{t('panel.process', { n: events.length })}</div>
+          <details
+            className={css.process}
+            open={processOpen}
+            onToggle={(event) => { setProcessOpen(event.currentTarget.open) }}
+          >
+            <summary className={css.sectionLabel}>{t('panel.process', { n: events.length })}</summary>
             <div className={css.timeline}>
               {events.map((event) => {
                 const body = eventBody(event, t)
@@ -248,7 +268,7 @@ export function HarnessPanel(props: {
                 )
               })}
             </div>
-          </>
+          </details>
         )}
         {errors.length > 0 && (
           <>

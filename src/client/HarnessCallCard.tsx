@@ -23,7 +23,7 @@ import { HARNESS_LABELS, isHarnessKey } from '../shared/harness.ts'
 import type { HarnessTranslate } from './contracts.ts'
 import type { PanelTarget } from './HarnessPanel.tsx'
 import css from './HarnessCall.module.css'
-import { brief, matchRun, readArgs, readResult, seconds, useRoster, type RunFeed } from './runs.ts'
+import { brief, matchRun, readArgs, readResult, seconds, useChannel, useRoster, type RunFeed } from './runs.ts'
 
 /** Cap of the prompt excerpt shown on a running card. */
 const PROMPT_EXCERPT_CHARACTERS = 140
@@ -76,8 +76,10 @@ export function HarnessCallCard(props: {
   // A settled card needs no roster: its own result carries the runId, so the
   // shared poller stops as soon as the last live call lands.
   const runs = useRoster(feed, !settled)
+  const channel = useChannel(feed, !settled)
   const summary = settled ? undefined : matchRun(runs, callId, args.harness)
   const label = result?.label ?? summary?.label ?? harnessLabel(args.harness)
+  const channelError = settled ? undefined : channel.error
 
   const open = (): void => {
     onOpen({
@@ -134,10 +136,13 @@ export function HarnessCallCard(props: {
         <span className={css.label}>{`${label} · ${t('card.running')}`}</span>
       </div>
       <div className={css.status}>
-        {summary === undefined || summary.phase === 'starting'
-          ? t('card.starting')
-          : liveStatus(summary, t)}
+        {channelError !== undefined
+          ? t('card.channelDown')
+          : summary === undefined || summary.phase === 'starting'
+            ? t('card.starting')
+            : liveStatus(summary, t)}
       </div>
+      {channelError !== undefined && <div className={css.cardErrors}>{channelError}</div>}
       {liveSession !== null && liveSession !== undefined && (
         <div className={css.meta}>{`session ${liveSession}`}</div>
       )}

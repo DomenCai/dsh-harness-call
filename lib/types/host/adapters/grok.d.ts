@@ -4,6 +4,8 @@
  * Session handling: `--session-id <id>` opens a run on a caller-chosen id,
  * `--resume <id>` continues one. Unlike the other two harnesses the prompt is
  * an argument, not stdin, so this adapter spawns with no stdin at all.
+ * Reasoning is pinned to `--reasoning-effort high` so a TUI `xhigh` default
+ * cannot leak into delegated one-shot calls.
  *
  * @module dsh-harness-call/host/adapters/grok
  */
@@ -20,5 +22,10 @@ export interface GrokState extends RunState {
     end?: Record<string, unknown>;
     /** The `error` frame, once seen; supersedes `end`. */
     error?: Record<string, unknown>;
+    /**
+     * `toolCallId` → tool name, so a `tool_call_update` (which carries no name
+     * of its own) can be attributed to the tool the `tool_call` announced.
+     */
+    tools: Map<string, string>;
 }
 export declare const grokAdapter: HarnessAdapter<GrokState>;

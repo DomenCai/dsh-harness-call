@@ -11,7 +11,7 @@
 - **规范化事件模型** —— 每个 adapter 把自家 CLI 的原生 JSONL 翻译成同一个 `HarnessEvent` 联合类型（`session` / `reasoning` / `text` / `tool` / `file` / `error` / `usage` / `note`）；存储、卡片、面板讲同一种语言，新增 harness 无需改渲染。
 - **按 `runId` 键控的运行表** —— host 不再是「每个 harness 一份快照」，而是一张运行表：同一个 harness 并发多次调用互不覆盖。卡片凭工具 `callId` 找到属于自己的那次运行，找不到才回退到该 harness 最新的一次。
 - **增量拉取** —— 浏览器侧调 `get(runId, sinceSeq)`，只取游标之后的新事件；整页共用一个 2s 轮询器，没有进行中的调用时完全停轮询。
-- **过程时间线** —— 点击卡片在 DSH 详情列展开：思考文本弱化显示，工具调用带退出码并可展开看**完整入参**，文件变更、错误分块呈现，费用/轮次在页脚，每行都有相对时间戳。
+- **过程时间线** —— 点击卡片打开浮动面板：已结束的运行默认折叠过程列表（进行中则展开），思考文本弱化显示，工具调用带退出码并可展开看**完整入参**，费用/轮次在页脚。
 - **不静默截断** —— 单次运行的环形缓冲淘汰事件时，淘汰条数以 `droppedEvents` 上报，面板明确提示时间线从中途开始。
 - **会话自动续接** —— 每个 harness 默认续接自己最近一次**成功**的会话，多轮追问天然共享上下文；`newSession` / `sessionId` 可覆盖。
 - **adapter 架构** —— 一个 harness 就是 [`src/host/adapters/`](src/host/adapters) 下的一个 adapter（`build` 构参 / `translate` 翻译事件 / `finalize` 归类结果）；运行身份、序号、相对时间戳和保留策略归存储，不归 adapter。
@@ -66,6 +66,7 @@ dsh plugin --profile web add github:DomenCai/dsh-harness-call
 
 - **codex** 默认 `read-only` 沙箱；只有你在对话中明确授权才会传 `workspace-write`，且仅对新会话生效——续接的会话保持它创建时的沙箱与可写根目录。
 - **claude** 使用自己的凭证存储：`ANTHROPIC_AUTH_TOKEN` 和 `ANTHROPIC_BASE_URL` 会从子进程环境中**移除**（是移除，不是置空），宿主注入的网关凭证不会流到它那里。
+- **grok** 固定传 `--reasoning-effort high`，避免 `~/.grok/config.toml` 里 TUI 的 `default_reasoning_effort = "xhigh"` 泄漏进一次性委托。
 - 永远不向任何 CLI 传绕过权限的标志。
 - 每次运行都有硬超时（默认 900s，收敛到 60–3600），到期或取消时整棵进程树被终止——先 SIGTERM，10s 宽限后 SIGKILL。
 

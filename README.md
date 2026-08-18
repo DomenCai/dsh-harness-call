@@ -11,7 +11,7 @@ One model-facing `harness_call` tool, `@claude` / `@codex` / `@grok` composer me
 - **Normalized event model** — each adapter translates its CLI's native JSONL into one `HarnessEvent` union (`session` / `reasoning` / `text` / `tool` / `file` / `error` / `usage` / `note`), so the store, the cards and the panel all speak one language and a new harness needs no rendering change.
 - **Runs keyed by `runId`** — the host keeps a run table, not one snapshot per harness: several calls to the same harness run concurrently without overwriting each other. A card finds its own run by the tool `callId`, falling back to the newest run of that harness.
 - **Incremental polling** — the browser asks `get(runId, sinceSeq)` and receives only the events after its cursor; one shared poller (2s) serves every card on the page and stops entirely once no call is live.
-- **Process timeline** — clicking a card opens the DSH details column: reasoning de-emphasized, tool calls with exit code and their **complete** arguments behind a disclosure, file changes, errors, and cost/turn accounting in the footer — each row with a relative timestamp.
+- **Process timeline** — clicking a card opens the floating panel: the process list is collapsed on a finished run (open while it is still live), reasoning is de-emphasized, tool calls show their exit code and **complete** arguments behind a disclosure, and cost/turn accounting sits in the footer.
 - **No silent truncation** — when a run's ring buffer evicts, the count is reported as `droppedEvents` and the panel says the timeline starts mid-run.
 - **Session auto-continue** — each harness continues its own most recent *successful* session by default, so multi-turn follow-ups share context; `newSession` / `sessionId` override.
 - **Adapter architecture** — one harness is one adapter (`build` argv / `translate` events / `finalize` verdict) under [`src/host/adapters/`](src/host/adapters); run identity, sequence numbers, relative timestamps and retention belong to the store, not to the adapters.
@@ -66,6 +66,7 @@ The values above are the defaults; omit a key to keep its default.
 
 - **codex** defaults to a `read-only` sandbox; `workspace-write` is only passed when you explicitly authorize it in the conversation, and only for a new session — a resumed session keeps the sandbox and writable roots it was created with.
 - **claude** runs on its own credential store: `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` are *removed* from the child environment (removed, not blanked), so host-injected gateway credentials never reach it.
+- **grok** is invoked with `--reasoning-effort high`, so a TUI `default_reasoning_effort = "xhigh"` in `~/.grok/config.toml` does not leak into delegated one-shot calls.
 - Permission-bypass flags are never passed to any CLI.
 - Every run has a hard timeout (default 900s, clamped to 60–3600) and is terminated tree-wide on expiry or cancellation — SIGTERM, then SIGKILL after a 10s grace window.
 

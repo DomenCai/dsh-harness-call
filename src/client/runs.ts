@@ -37,6 +37,23 @@ const POLL_MS = 2000
 const NO_RUNS: readonly RunSummary[] = []
 
 /**
+ * Whether the browser half can talk to the host store.
+ *
+ * Distinct from an empty roster: a live call with no matching run is still
+ * "starting", but a channel that never mounted or whose `list()` keeps failing
+ * must not hide behind that same copy.
+ */
+export interface ChannelStatus {
+  /** The Remote namespace is mounted and at least one `list()` has succeeded. */
+  ready: boolean
+  /** Last mount or poll failure; cleared on the next successful `list()`. */
+  error: string | undefined
+}
+
+/** Stable empty channel, so a never-polled feed keeps one snapshot identity. */
+const NO_CHANNEL: ChannelStatus = { ready: false, error: undefined }
+
+/**
  * The page-wide run feed: a shared roster subscription plus the focused-run
  * fetch. Both faces are stable function identities, so they can ride
  * `useSyncExternalStore` and `useCallback` deps without re-subscribing.
@@ -46,6 +63,13 @@ export interface RunFeed {
   subscribe: (listener: () => void) => () => void
   /** Newest-first roster, as of the last SUCCESSFUL poll. */
   getSnapshot: () => readonly RunSummary[]
+  /** Channel liveness as of the last poll or mount report. */
+  getChannel: () => ChannelStatus
+  /**
+   * Record a `$mount` failure so cards can show it before the first poll.
+   * A successful mount clears the error and lets the next poll mark `ready`.
+   */
+  reportMount: (error: string | undefined) => void
   /**
    * One incremental slice of a run's timeline. Three answers, because the
    * caller has to tell "nothing new yet" from "there will never be anything":
@@ -71,8 +95,19 @@ export interface RunFeed {
 export function createRunFeed(resolve: () => HarnessCallRemoteClient | undefined): RunFeed {
   const listeners = new Set<() => void>()
   let snapshot: readonly RunSummary[] = NO_RUNS
+  let channel: ChannelStatus = NO_CHANNEL
   let timer: number | undefined
   let inFlight = false
+
+  const notify = (): void => {
+    for (const listener of [...listeners]) listener()
+  }
+
+  const setChannel = (next: ChannelStatus): void => {
+    if (channel.ready === next.ready && channel.error === next.error) return
+    channel = next
+    notify()
+  }
 
   const poll = async (): Promise<void> => {
     const api = resolve()
@@ -84,16 +119,25 @@ export function createRunFeed(resolve: () => HarnessCallRemoteClient | undefined
     try {
       const outcome = await api.list()
       // A failed poll keeps the last good roster on screen; blanking it would
-      // reset every live card to "starting" on one dropped request.
-      if (!outcome.ok) return
+      // reset every live card to "starting" on one dropped request. The error
+      // is published so a card that has never seen a run can say why.
+      if (!outcome.ok) {
+        setChannel({ ready: channel.ready, error: outcome.error.message })
+        return
+      }
       snapshot = outcome.value
-      for (const listener of [...listeners]) listener()
-    } catch {
+      channel = { ready: true, error: undefined }
+      notify()
+    } catch (error) {
       // A REJECTION is the same event as `ok: false`, and it is not exotic: the
       // outcome envelope only folds in call-level failures, while an arity or
       // mount mismatch throws, and the api gateway throws outright once the
       // websocket is gone. Restarting the host with a live card on screen would
       // otherwise raise one unhandled rejection every poll until it reconnects.
+      setChannel({
+        ready: channel.ready,
+        error: error instanceof Error ? error.message : String(error),
+      })
     } finally {
       inFlight = false
     }
@@ -115,6 +159,10 @@ export function createRunFeed(resolve: () => HarnessCallRemoteClient | undefined
       }
     },
     getSnapshot: () => snapshot,
+    getChannel: () => channel,
+    reportMount: (error) => {
+      setChannel({ ready: false, error })
+    },
     detail: async (runId, sinceSeq) => {
       const api = resolve()
       if (api === undefined) return undefined
@@ -145,6 +193,21 @@ export function useRoster(feed: RunFeed, active: boolean): readonly RunSummary[]
     [feed, active],
   )
   return useSyncExternalStore(subscribe, feed.getSnapshot)
+}
+
+/**
+ * Read the shared channel status, polling only while `active`.
+ *
+ * @param feed - the page feed.
+ * @param active - whether this surface still needs live data.
+ * @returns whether the Remote is up, and the last failure if any.
+ */
+export function useChannel(feed: RunFeed, active: boolean): ChannelStatus {
+  const subscribe = useCallback(
+    (listener: () => void) => (active ? feed.subscribe(listener) : () => {}),
+    [feed, active],
+  )
+  return useSyncExternalStore(subscribe, feed.getChannel)
 }
 
 /**

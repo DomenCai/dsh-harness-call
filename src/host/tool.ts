@@ -236,17 +236,18 @@ export function createHarnessCallTool(ctx: Context, store: RunStore): ToolDefini
         callId: String(exec.callId),
       })
 
-      let steps = 0
-      const timeline: string[] = []
+      /**
+       * The model-facing timeline is NOT built from the raw stream. Grok's
+       * `streaming-json` emits one frame per token, so raw counting made
+       * `steps` a token count (observed: 3062 for one 81s run) and let the
+       * reply's last seconds evict every session/tool event from the bounded
+       * digest. The store already folds adjacent deltas into semantic events,
+       * so the digest is read back out of it after the run finishes — see the
+       * `store.get` call below.
+       */
       const record = (events: readonly HarnessEvent[]): void => {
         if (events.length === 0) return
         run.append(events)
-        const seconds = Math.round((Date.now() - startedAt) / 1000)
-        for (const event of events) {
-          steps += 1
-          timeline.push(describeEvent(event, seconds))
-          if (timeline.length > RESULT_TIMELINE_EVENTS) timeline.shift()
-        }
       }
 
       /*
@@ -423,6 +424,19 @@ export function createHarnessCallTool(ctx: Context, store: RunStore): ToolDefini
           errors,
           extras: finished.extras,
         })
+
+        /*
+         * Read the digest back out of the store: `eventCount` counts MERGED
+         * semantic events (delta folding consumes no `seq`), and the retained
+         * events carry the `at` the store stamped, so each digest line gets the
+         * moment the work actually happened rather than the batch's wall clock.
+         * The run is finished, so nothing here can still change.
+         */
+        const detail = store.get(run.runId, 0)
+        const steps = detail?.summary.eventCount ?? 0
+        const timeline = (detail?.events ?? [])
+          .slice(-RESULT_TIMELINE_EVENTS)
+          .map(event => describeEvent(event, Math.round(event.at / 1000)))
 
         const stderrLines = stderrTail.trim()
         return {

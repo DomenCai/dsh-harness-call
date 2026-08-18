@@ -14,6 +14,7 @@ declare const zh: {
     'cand.codex': string;
     'cand.grok': string;
     'card.starting': string;
+    'card.channelDown': string;
     'card.running': string;
     'card.elapsed': string;
     'card.events': string;
@@ -35,6 +36,7 @@ declare const zh: {
     'panel.prompt': string;
     'panel.noOutput': string;
     'panel.waiting': string;
+    'panel.channelDown': string;
     'panel.usageTurns': string;
     'event.session': string;
     'event.reasoning': string;
@@ -59,6 +61,7 @@ export declare const DICTIONARIES: {
         'cand.codex': string;
         'cand.grok': string;
         'card.starting': string;
+        'card.channelDown': string;
         'card.running': string;
         'card.elapsed': string;
         'card.events': string;
@@ -80,6 +83,7 @@ export declare const DICTIONARIES: {
         'panel.prompt': string;
         'panel.noOutput': string;
         'panel.waiting': string;
+        'panel.channelDown': string;
         'panel.usageTurns': string;
         'event.session': string;
         'event.reasoning': string;
@@ -95,6 +99,6 @@ export declare const DICTIONARIES: {
         'file.edit': string;
         'file.delete': string;
     };
-    en: Record<"cand.claude" | "cand.codex" | "cand.grok" | "card.starting" | "card.running" | "card.elapsed" | "card.events" | "card.last" | "card.sessionNew" | "card.sessionResume" | "card.expandFull" | "card.openDone" | "card.openRunning" | "panel.title" | "panel.close" | "panel.sessionNew" | "panel.sessionResume" | "panel.process" | "panel.dropped" | "panel.reply" | "panel.replyRunning" | "panel.errors" | "panel.prompt" | "panel.noOutput" | "panel.waiting" | "panel.usageTurns" | "event.session" | "event.reasoning" | "event.text" | "event.tool" | "event.file" | "event.error" | "event.usage" | "event.note" | "event.exit" | "event.input" | "file.create" | "file.edit" | "file.delete", string>;
+    en: Record<"cand.claude" | "cand.codex" | "cand.grok" | "card.starting" | "card.channelDown" | "card.running" | "card.elapsed" | "card.events" | "card.last" | "card.sessionNew" | "card.sessionResume" | "card.expandFull" | "card.openDone" | "card.openRunning" | "panel.title" | "panel.close" | "panel.sessionNew" | "panel.sessionResume" | "panel.process" | "panel.dropped" | "panel.reply" | "panel.replyRunning" | "panel.errors" | "panel.prompt" | "panel.noOutput" | "panel.waiting" | "panel.channelDown" | "panel.usageTurns" | "event.session" | "event.reasoning" | "event.text" | "event.tool" | "event.file" | "event.error" | "event.usage" | "event.note" | "event.exit" | "event.input" | "file.create" | "file.edit" | "file.delete", string>;
 };
 export {};

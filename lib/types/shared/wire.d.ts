@@ -69,9 +69,8 @@ export type HarnessCallRemoteClient = {
 /**
  * Invocation descriptors for every {@link HarnessCallRemote} method.
  *
- * Both parameters and results use the `src-json` codec: the payloads are the
- * plain-JSON contract types in ./events.ts, so there is no strict schema
- * symbol to register.
+ * Identity-strict codecs, not `src-json`: the Client Remote mount rejects any
+ * descriptor whose result or parameters lack a generated-shaped strict codec.
  */
 export declare const HARNESS_CALL_DESCRIPTORS: readonly [{
     readonly id: "dsh-harness-call#harnessCall/list";
@@ -83,7 +82,11 @@ export declare const HARNESS_CALL_DESCRIPTORS: readonly [{
     };
     readonly parameters: readonly [];
     readonly result: {
-        readonly mode: "src-json";
+        readonly mode: "strict";
+        readonly typeSymbol: string;
+        readonly schema: {
+            parse: (value: unknown) => unknown;
+        };
     };
 }, {
     readonly id: "dsh-harness-call#harnessCall/get";
@@ -98,18 +101,30 @@ export declare const HARNESS_CALL_DESCRIPTORS: readonly [{
         readonly wire: "runId";
         readonly source: "json";
         readonly codec: {
-            readonly mode: "src-json";
+            readonly mode: "strict";
+            readonly typeSymbol: string;
+            readonly schema: {
+                parse: (value: unknown) => unknown;
+            };
         };
     }, {
         readonly name: "sinceSeq";
         readonly wire: "sinceSeq";
         readonly source: "json";
         readonly codec: {
-            readonly mode: "src-json";
+            readonly mode: "strict";
+            readonly typeSymbol: string;
+            readonly schema: {
+                parse: (value: unknown) => unknown;
+            };
         };
     }];
     readonly result: {
-        readonly mode: "src-json";
+        readonly mode: "strict";
+        readonly typeSymbol: string;
+        readonly schema: {
+            parse: (value: unknown) => unknown;
+        };
     };
 }];
 /**
@@ -128,7 +143,11 @@ export declare const HARNESS_CALL_CONTRIBUTION: {
         };
         readonly parameters: readonly [];
         readonly result: {
-            readonly mode: "src-json";
+            readonly mode: "strict";
+            readonly typeSymbol: string;
+            readonly schema: {
+                parse: (value: unknown) => unknown;
+            };
         };
     }, {
         readonly id: "dsh-harness-call#harnessCall/get";
@@ -143,18 +162,30 @@ export declare const HARNESS_CALL_CONTRIBUTION: {
             readonly wire: "runId";
             readonly source: "json";
             readonly codec: {
-                readonly mode: "src-json";
+                readonly mode: "strict";
+                readonly typeSymbol: string;
+                readonly schema: {
+                    parse: (value: unknown) => unknown;
+                };
             };
         }, {
             readonly name: "sinceSeq";
             readonly wire: "sinceSeq";
             readonly source: "json";
             readonly codec: {
-                readonly mode: "src-json";
+                readonly mode: "strict";
+                readonly typeSymbol: string;
+                readonly schema: {
+                    parse: (value: unknown) => unknown;
+                };
             };
         }];
         readonly result: {
-            readonly mode: "src-json";
+            readonly mode: "strict";
+            readonly typeSymbol: string;
+            readonly schema: {
+                parse: (value: unknown) => unknown;
+            };
         };
     }];
 };
