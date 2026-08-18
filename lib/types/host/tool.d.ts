@@ -12,6 +12,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools';
+import { type HarnessCallSettings } from '../shared/policy.ts';
 import type { RunStore } from './runs.ts';
 /** Model-facing tool name; also the key the browser card renders against. */
 export declare const TOOL_NAME = "harness_call";
@@ -29,6 +30,7 @@ export declare const ROUTING_SECTION: string;
  *
  * @param ctx - the plugin fiber's context; supplies `subprocess` and deadlines.
  * @param store - the run store this tool writes and the browser reads.
+ * @param readSettings - live settings read; applied on every spawn.
  * @returns a registry-ready tool definition.
  */
-export declare function createHarnessCallTool(ctx: Context, store: RunStore): ToolDefinition;
+export declare function createHarnessCallTool(ctx: Context, store: RunStore, readSettings: () => HarnessCallSettings): ToolDefinition;

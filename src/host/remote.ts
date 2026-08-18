@@ -1,8 +1,9 @@
 /**
  * The `harnessCall` Cordis service, exposed to the browser over Typert Remote.
  *
- * A read-only projection of {@link RunStore}: it holds no state of its own, so
- * a browser poll can never race the tool's writes into an inconsistent view.
+ * A projection of {@link RunStore} plus the durable settings namespace. The
+ * run methods hold no state of their own, so a browser poll can never race
+ * the tool's writes into an inconsistent view.
  *
  * `implements HarnessCallRemote` is load-bearing — it is the compiler check
  * that the methods the browser mounts descriptors for actually exist here with
@@ -14,15 +15,25 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { RunDetail, RunSummary } from '../shared/events.ts'
+import type { HarnessCallSettings, HarnessCallSettingsUpdate } from '../shared/policy.ts'
 import { SERVICE_KEY, type HarnessCallRemote } from '../shared/wire.ts'
 import type { RunStore } from './runs.ts'
 
 export class HarnessCallRemoteService extends TypertRemoteService implements HarnessCallRemote {
   private readonly runs: RunStore
+  private readonly readSettings: () => HarnessCallSettings
+  private readonly writeSettings: (update: HarnessCallSettingsUpdate) => Promise<HarnessCallSettings>
 
-  constructor(ctx: Context, runs: RunStore) {
+  constructor(
+    ctx: Context,
+    runs: RunStore,
+    readSettings: () => HarnessCallSettings,
+    writeSettings: (update: HarnessCallSettingsUpdate) => Promise<HarnessCallSettings>,
+  ) {
     super(ctx, SERVICE_KEY)
     this.runs = runs
+    this.readSettings = readSettings
+    this.writeSettings = writeSettings
   }
 
   /** Every known run, newest `startedAt` first. */
@@ -40,5 +51,17 @@ export class HarnessCallRemoteService extends TypertRemoteService implements Har
   @Remote
   async get(runId: string, sinceSeq: number): Promise<RunDetail | null> {
     return this.runs.get(runId, sinceSeq)
+  }
+
+  /** Current per-harness access / effort settings. */
+  @Remote
+  async getSettings(): Promise<HarnessCallSettings> {
+    return this.readSettings()
+  }
+
+  /** Persist one field and return the resolved section. */
+  @Remote
+  async updateSettings(update: HarnessCallSettingsUpdate): Promise<HarnessCallSettings> {
+    return this.writeSettings(update)
   }
 }

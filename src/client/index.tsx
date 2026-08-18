@@ -5,7 +5,8 @@
  * - an `@` composer trigger source offering @claude / @codex / @grok;
  * - a `harness_call` tool card showing the live timeline while the external
  *   agent works, and its reply once it finishes;
- * - a floating `shell.overlay` panel with the full timeline and reply text.
+ * - a floating `shell.overlay` panel with the full timeline and reply text;
+ * - a `settings.section` page for per-harness access and effort defaults.
  *
  * Everything it displays comes from the host's `harnessCall` Remote, mounted
  * from the descriptors in ../shared/wire.ts — the same constant the host
@@ -16,15 +17,17 @@
 
 import { useEffect, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { HARNESS_KEYS } from '../shared/harness.ts'
+import { defaultHarnessCallSettings, type HarnessCallSettingsUpdate } from '../shared/policy.ts'
 import { HARNESS_CALL_CONTRIBUTION, SERVICE_KEY, type HarnessCallRemoteClient } from '../shared/wire.ts'
 import type {} from './contracts.ts'
 import { HarnessCallCard } from './HarnessCallCard.tsx'
 import { HarnessPanel, type PanelTarget } from './HarnessPanel.tsx'
 import { DICTIONARIES, LOCALE_NS } from './locales.ts'
 import { createRunFeed } from './runs.ts'
+import { HarnessSettingsSection, type HarnessSectionInjected } from './SettingsSection.tsx'
 
 /** The tool this half renders a card for; the keyed-slot cell. */
 const TOOL_NAME = 'harness_call'
@@ -65,6 +68,56 @@ export function apply(ctx: ClientContext): void {
   let api: HarnessCallRemoteClient | undefined
 
   const feed = createRunFeed(() => api)
+  const settingsScope = createSnapshotStore({ value: defaultHarnessCallSettings() })
+  let settingsGeneration = 0
+  let settingsTail: Promise<void> = Promise.resolve()
+
+  const reportSettingsError = (operation: 'read' | 'update', error: unknown): void => {
+    console.error(`[dsh-harness-call] settings ${operation} failed:`, error)
+  }
+
+  const loadSettings = async (): Promise<void> => {
+    const remote = api
+    if (remote === undefined) return
+    const generation = ++settingsGeneration
+    try {
+      const result = await remote.getSettings()
+      if (api !== remote || generation !== settingsGeneration) return
+      if (!result.ok) {
+        reportSettingsError('read', result.error)
+        return
+      }
+      settingsScope.set({ value: result.value })
+    } catch (error) {
+      if (api === remote && generation === settingsGeneration) reportSettingsError('read', error)
+    }
+  }
+
+  const updateSettings = (update: HarnessCallSettingsUpdate): Promise<void> => {
+    const operation = settingsTail.then(async () => {
+      const remote = api
+      if (remote === undefined) {
+        const error = new Error('the harnessCall Remote is not mounted')
+        reportSettingsError('update', error)
+        throw error
+      }
+      const generation = ++settingsGeneration
+      try {
+        const result = await remote.updateSettings(update)
+        if (api !== remote || generation !== settingsGeneration) return
+        if (!result.ok) {
+          reportSettingsError('update', result.error)
+          throw new Error(`${result.error.code}: ${result.error.message}`)
+        }
+        settingsScope.set({ value: result.value })
+      } catch (error) {
+        if (api === remote && generation === settingsGeneration) reportSettingsError('update', error)
+        throw error
+      }
+    })
+    settingsTail = operation.catch(() => {})
+    return operation
+  }
 
   ctx.effect(async () => {
     // Mount failures used to throw and kill this fiber, which unregistered the
@@ -81,7 +134,9 @@ export function apply(ctx: ClientContext): void {
         }
       }
       feed.reportMount(undefined)
+      await loadSettings()
       return () => {
+        settingsGeneration += 1
         api = undefined
         void dispose()
       }
@@ -174,4 +229,15 @@ export function apply(ctx: ClientContext): void {
       />
     ),
   ))
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'harness-call',
+    order: 56,
+    label: () => t('nav'),
+    locale: LOCALE_NS,
+    inject: (): HarnessSectionInjected => ({
+      hooks: { scope: settingsScope },
+      update: updateSettings,
+    }),
+  }, HarnessSettingsSection))
 }

@@ -35,6 +35,17 @@ export const claudeAdapter: HarnessAdapter<ClaudeState> = {
   build(req: RunRequest): SpawnSpec {
     const argv = ['--print', '--verbose', '--output-format', 'stream-json']
     argv.push(req.mode === 'resume' ? '--resume' : '--session-id', req.sessionId)
+    if (req.access === 'read-only') {
+      // Headless Claude has no OS sandbox flag. `plan` keeps it from applying
+      // edits or running mutating tools; that is the closest match to
+      // read-only among the published permission modes.
+      argv.push('--permission-mode', 'plan')
+    } else if (req.access === 'workspace-write') {
+      argv.push('--permission-mode', 'acceptEdits')
+    } else if (req.access === 'full-access') {
+      argv.push('--permission-mode', 'bypassPermissions')
+    }
+    if (req.effort !== undefined) argv.push('--effort', req.effort)
     return {
       argv,
       stdin: req.prompt,

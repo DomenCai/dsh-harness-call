@@ -67,6 +67,7 @@
     "@deepseek-ai/dsh-client-ui-input-trigger": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-client-ui-layout": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-subprocess": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
@@ -92,6 +93,9 @@
       "optional": true
     },
     "@deepseek-ai/dsh-client-ui-slots": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-settings": {
       "optional": true
     },
     "@deepseek-ai/dsh-subprocess": {
@@ -126,6 +130,7 @@
     "@deepseek-ai/dsh-client-ui-layout": "0.1.0-rc.6",
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.0-rc.6",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings": "0.1.0-rc.6",
     "@deepseek-ai/dsh-session": "0.1.0-rc.6",
     "@deepseek-ai/dsh-subprocess": "0.1.0-rc.6",
     "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.6",

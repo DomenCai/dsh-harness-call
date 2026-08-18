@@ -48,6 +48,17 @@ dsh plugin --profile web add github:DomenCai/dsh-harness-call
 
 也可以自然语言：「让 Claude 看看这个问题」「对比一下 codex 和 grok 的回答」。
 
+## 设置
+
+打开 **设置 → 外部 Harness**，可以为 Claude / Codex / Grok 各自指定：
+
+- **权限**：只读、仓库可写、完全访问，或 **模型决定**
+- **思考强度**：low / medium / high / xhigh，或 **模型决定**
+
+选了具体值，下一次启动就按这个传参，工具参数不再覆盖。选「模型决定」时，才读这次 `harness_call` 的 `access` / `effort`（`codexSandbox` 仍是 `access` 的旧名）。
+
+默认：Claude / Codex 两项都是「模型决定」；Grok 思考强度固定为 `high`，避免吃到交互式 TUI 的 `xhigh`。已经在跑的进程不会改参数。Codex / Grok 的沙箱只在**新会话**上生效，续接沿用创建时的配置。
+
 ## 配置
 
 三个配置项都是 host 内存运行表的保留上界。在 profile 自己的补丁层 `~/.dsh/profiles/web/cordis.patch.yml` 里覆盖：
@@ -64,10 +75,10 @@ dsh plugin --profile web add github:DomenCai/dsh-harness-call
 
 ## 安全边界
 
-- **codex** 默认 `read-only` 沙箱；只有你在对话中明确授权才会传 `workspace-write`，且仅对新会话生效——续接的会话保持它创建时的沙箱与可写根目录。
+- **权限**由设置页决定。完全访问会落到各 CLI 最宽的无头模式（Claude `bypassPermissions`、Codex `danger-full-access` + 跳过审批、Grok `off` + `bypassPermissions`），只在信任的环境打开。
+- **codex** 在设置为「模型决定」且工具也没传 `access` 时，新会话仍默认 `read-only`。续接的会话保持它创建时的沙箱与可写根目录。
 - **claude** 使用自己的凭证存储：`ANTHROPIC_AUTH_TOKEN` 和 `ANTHROPIC_BASE_URL` 会从子进程环境中**移除**（是移除，不是置空），宿主注入的网关凭证不会流到它那里。
-- **grok** 固定传 `--reasoning-effort high`，避免 `~/.grok/config.toml` 里 TUI 的 `default_reasoning_effort = "xhigh"` 泄漏进一次性委托。
-- 永远不向任何 CLI 传绕过权限的标志。
+- **grok** 在设置为「模型决定」且工具也没传 `effort` 时仍固定 `--reasoning-effort high`，避免 `~/.grok/config.toml` 里 TUI 的 `default_reasoning_effort = "xhigh"` 泄漏进一次性委托。
 - 每次运行都有硬超时（默认 900s，收敛到 60–3600），到期或取消时整棵进程树被终止——先 SIGTERM，10s 宽限后 SIGKILL。
 
 ## 新增一个 harness

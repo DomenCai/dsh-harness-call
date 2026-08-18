@@ -62,6 +62,16 @@ export const HARNESS_CALL_MANIFEST: TypertContribution = {
             name: 'get',
             signature: 'get(runId: string, sinceSeq: number): Promise<RunDetail | null>',
           },
+          {
+            kind: 'method',
+            name: 'getSettings',
+            signature: 'getSettings(): Promise<HarnessCallSettings>',
+          },
+          {
+            kind: 'method',
+            name: 'updateSettings',
+            signature: 'updateSettings(update: HarnessCallSettingsUpdate): Promise<HarnessCallSettings>',
+          },
         ],
         types: [],
       },

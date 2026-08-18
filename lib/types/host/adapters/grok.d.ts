@@ -4,8 +4,11 @@
  * Session handling: `--session-id <id>` opens a run on a caller-chosen id,
  * `--resume <id>` continues one. Unlike the other two harnesses the prompt is
  * an argument, not stdin, so this adapter spawns with no stdin at all.
- * Reasoning is pinned to `--reasoning-effort high` so a TUI `xhigh` default
- * cannot leak into delegated one-shot calls.
+ * Reasoning defaults to `--reasoning-effort high` so a TUI `xhigh` default
+ * cannot leak into delegated one-shot calls; a concrete settings or tool
+ * override replaces that pin. Access maps onto built-in sandbox profiles
+ * (`read-only` / `workspace` / `off`) plus `dontAsk` so headless runs do
+ * not stall on an approval prompt this plugin cannot answer.
  *
  * @module dsh-harness-call/host/adapters/grok
  */

@@ -38,6 +38,18 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
                 block: ToolCallBlock;
             };
         };
+        /**
+         * One settings page. Restated here because `@deepseek-ai/dsh-client-ui-settings`
+         * is not a runtime dependency; the shell already declares the live seat.
+         */
+        'settings.section': {
+            kind: 'list';
+            scope: 'root';
+            owner: {
+                /** Close the settings panel (the shell owns the open state). */
+                close: () => void;
+            };
+        };
     }
     interface LocaleNamespaceMap {
         /** This plugin's own copy (../client/locales.ts). */

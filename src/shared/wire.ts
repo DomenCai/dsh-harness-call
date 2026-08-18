@@ -18,6 +18,7 @@
  */
 
 import type { RunDetail, RunSummary } from './events.ts'
+import type { HarnessCallSettings, HarnessCallSettingsUpdate } from './policy.ts'
 
 /** npm package name; the Typert contribution and bundle identity. */
 export const PACKAGE_NAME = 'dsh-harness-call'
@@ -42,6 +43,10 @@ export interface HarnessCallRemote {
    * @returns the detail, or `null` when the run id is unknown.
    */
   get(runId: string, sinceSeq: number): Promise<RunDetail | null>
+  /** Current per-harness access / effort settings. */
+  getSettings(): Promise<HarnessCallSettings>
+  /** Persist one field and return the resolved section. */
+  updateSettings(update: HarnessCallSettingsUpdate): Promise<HarnessCallSettings>
 }
 
 /**
@@ -92,6 +97,8 @@ const RUN_ID_CODEC = identityCodec(`${PACKAGE_NAME}#runId`)
 const SINCE_SEQ_CODEC = identityCodec(`${PACKAGE_NAME}#sinceSeq`)
 const RUN_SUMMARIES_CODEC = identityCodec(`${PACKAGE_NAME}#RunSummary[]`)
 const RUN_DETAIL_CODEC = identityCodec(`${PACKAGE_NAME}#RunDetail`)
+const SETTINGS_CODEC = identityCodec(`${PACKAGE_NAME}#HarnessCallSettings`)
+const SETTINGS_UPDATE_CODEC = identityCodec(`${PACKAGE_NAME}#HarnessCallSettingsUpdate`)
 
 /**
  * Invocation descriptors for every {@link HarnessCallRemote} method.
@@ -120,6 +127,26 @@ export const HARNESS_CALL_DESCRIPTORS = [
       { name: 'sinceSeq', wire: 'sinceSeq', source: 'json', codec: SINCE_SEQ_CODEC },
     ],
     result: RUN_DETAIL_CODEC,
+  },
+  {
+    id: `${PACKAGE_NAME}#${SERVICE_KEY}/getSettings`,
+    service: SERVICE_KEY,
+    namespace: SERVICE_KEY,
+    method: 'getSettings',
+    invocation: { kind: 'direct' },
+    parameters: [],
+    result: SETTINGS_CODEC,
+  },
+  {
+    id: `${PACKAGE_NAME}#${SERVICE_KEY}/updateSettings`,
+    service: SERVICE_KEY,
+    namespace: SERVICE_KEY,
+    method: 'updateSettings',
+    invocation: { kind: 'direct' },
+    parameters: [
+      { name: 'update', wire: 'update', source: 'json', codec: SETTINGS_UPDATE_CODEC },
+    ],
+    result: SETTINGS_CODEC,
   },
 ] as const
 

@@ -19,6 +19,16 @@ import type { JsonValue, ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type { HarnessEvent, RunMode } from '../shared/events.ts'
 import { HARNESS_KEYS, HARNESS_LABELS } from '../shared/harness.ts'
+import {
+  ACCESS_MODES,
+  EFFORT_LEVELS,
+  isAccessMode,
+  isEffortLevel,
+  resolveRunPolicy,
+  type AccessMode,
+  type EffortLevel,
+  type HarnessCallSettings,
+} from '../shared/policy.ts'
 import type { Outcome, RunRequest, RunResult } from './adapter.ts'
 import { ADAPTERS } from './adapters/index.ts'
 import type { RunStore } from './runs.ts'
@@ -117,7 +127,7 @@ const TOOL_DESCRIPTION: string = [
   'Call an external coding agent (Claude Code / Codex CLI / Grok CLI) with a self-contained prompt and return its final reply plus a process summary.',
   'prompt 必须自包含：外部 agent 看不到当前对话 / The external agent sees nothing of the current conversation.',
   '会话策略：默认自动续接同一 harness 最近一次成功会话；newSession=true 强制新会话；传 sessionId 显式续接。/ Sessions auto-continue per harness by default; newSession=true forces a fresh one.',
-  'codex 默认只读沙箱，仅当用户明确授权写入时传 codexSandbox="workspace-write"。/ codex defaults to a read-only sandbox; workspace-write requires explicit user authorization.',
+  '权限与思考档位以设置页为准；仅当对应项设为「模型决定」时才读 access / effort（或旧的 codexSandbox）。/ Access and effort come from Settings; pass access/effort only when that setting is "model decides".',
   'timeoutSeconds 默认 900（60-3600）。cwd 默认当前工作区。',
 ].join(' ')
 
@@ -126,9 +136,14 @@ const TOOL_DESCRIPTION: string = [
  *
  * @param ctx - the plugin fiber's context; supplies `subprocess` and deadlines.
  * @param store - the run store this tool writes and the browser reads.
+ * @param readSettings - live settings read; applied on every spawn.
  * @returns a registry-ready tool definition.
  */
-export function createHarnessCallTool(ctx: Context, store: RunStore): ToolDefinition {
+export function createHarnessCallTool(
+  ctx: Context,
+  store: RunStore,
+  readSettings: () => HarnessCallSettings,
+): ToolDefinition {
   /**
    * Most recent SUCCESSFUL session per harness — the default auto-continue
    * target. Closure state, so it lives and dies with the plugin fiber: a
@@ -162,10 +177,20 @@ export function createHarnessCallTool(ctx: Context, store: RunStore): ToolDefini
         type: 'number',
         description: '超时秒数 60-3600，默认 900 / timeout in seconds, default 900',
       },
+      access: {
+        type: 'string',
+        enum: ACCESS_MODES,
+        description: '仅当设置页该项为「模型决定」时生效：只读 / 仓库可写 / 完全访问 / Only used when Settings access is "model decides"',
+      },
+      effort: {
+        type: 'string',
+        enum: EFFORT_LEVELS,
+        description: '仅当设置页该项为「模型决定」时生效：low / medium / high / xhigh / Only used when Settings effort is "model decides"',
+      },
       codexSandbox: {
         type: 'string',
-        enum: ['read-only', 'workspace-write'],
-        description: '仅 codex 新会话的沙箱模式 / codex new-session sandbox mode',
+        enum: ACCESS_MODES,
+        description: 'access 的旧名，语义相同 / deprecated alias of access',
       },
     },
     output: {
@@ -213,12 +238,23 @@ export function createHarnessCallTool(ctx: Context, store: RunStore): ToolDefini
       }
 
       const timeoutSeconds = Math.min(3600, Math.max(60, Math.round(Number(args.timeoutSeconds) || 900)))
+      const accessOverride: AccessMode | undefined = isAccessMode(args.access)
+        ? args.access
+        : isAccessMode(args.codexSandbox)
+          ? args.codexSandbox
+          : undefined
+      const effortOverride: EffortLevel | undefined = isEffortLevel(args.effort) ? args.effort : undefined
+      const policy = resolveRunPolicy(readSettings(), harness, {
+        access: accessOverride,
+        effort: effortOverride,
+      })
       const req: RunRequest = {
         prompt: args.prompt,
         cwd,
         mode,
         sessionId,
-        sandbox: args.codexSandbox === 'workspace-write' ? 'workspace-write' : 'read-only',
+        access: policy.access,
+        effort: policy.effort,
         timeoutSeconds,
       }
 

@@ -13,6 +13,7 @@
 import type { SubprocessOutcome } from '@deepseek-ai/dsh-subprocess';
 import type { HarnessEvent, RunMode } from '../shared/events.ts';
 import type { HarnessKey } from '../shared/harness.ts';
+import type { AccessMode, EffortLevel } from '../shared/policy.ts';
 /** Exit facts of the closed child process, as the subprocess seam reports them. */
 export type Outcome = SubprocessOutcome;
 /** Everything an adapter needs to spell one run. */
@@ -30,11 +31,18 @@ export interface RunRequest {
      */
     readonly sessionId: string;
     /**
-     * Sandbox policy for harnesses that take one at session creation. Only
-     * `codex` reads it today, and only for a new session: a resumed session
-     * keeps the sandbox and writable roots it was created with.
+     * Resolved filesystem / approval posture for this spawn. `undefined` means
+     * the adapter must not pass an access flag (settings said `model` and the
+     * tool did not name one). Codex still defaults a missing value to
+     * `read-only` for a *new* session; a resume never restates sandbox.
      */
-    readonly sandbox: 'read-only' | 'workspace-write';
+    readonly access: AccessMode | undefined;
+    /**
+     * Resolved reasoning effort for this spawn. `undefined` means the adapter
+     * must not pass an effort flag — except Grok, which still pins `high` so a
+     * TUI `xhigh` default cannot leak into a delegated call.
+     */
+    readonly effort: EffortLevel | undefined;
     /** Deadline in seconds, already clamped by the orchestrator. */
     readonly timeoutSeconds: number;
 }

@@ -48,6 +48,17 @@ Just talk to the agent:
 
 Or ask naturally: “让 Claude 看看这个问题”, “对比一下 codex 和 grok 的回答”.
 
+## Settings
+
+**Settings → External harnesses** has one card per CLI:
+
+- **Access**: read-only, workspace-write, full access, or **Model decides**
+- **Reasoning effort**: low / medium / high / xhigh, or **Model decides**
+
+A concrete value is applied on the next launch and the tool arguments cannot override it. **Model decides** is the only case that reads this call's `access` / `effort` (`codexSandbox` remains a deprecated alias of `access`).
+
+Defaults: Claude and Codex leave both fields to the model; Grok effort is pinned to `high` so an interactive TUI `xhigh` cannot leak in. A process that is already running keeps its original flags. Codex / Grok sandbox flags apply to **new** sessions only; a resume keeps the profile it was created with.
+
 ## Configuration
 
 All three settings are retention bounds on the host's in-memory run store. Override them in the profile's own patch layer, `~/.dsh/profiles/web/cordis.patch.yml`:
@@ -64,10 +75,10 @@ The values above are the defaults; omit a key to keep its default.
 
 ## Security posture
 
-- **codex** defaults to a `read-only` sandbox; `workspace-write` is only passed when you explicitly authorize it in the conversation, and only for a new session — a resumed session keeps the sandbox and writable roots it was created with.
+- **Access** comes from Settings. Full access maps onto each CLI's widest headless mode (Claude `bypassPermissions`, Codex `danger-full-access` plus approval bypass, Grok `off` plus `bypassPermissions`) — only turn it on in a trusted environment.
+- **codex** still defaults a new session to `read-only` when Settings is “Model decides” and the tool did not pass `access`. A resumed session keeps the sandbox and writable roots it was created with.
 - **claude** runs on its own credential store: `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` are *removed* from the child environment (removed, not blanked), so host-injected gateway credentials never reach it.
-- **grok** is invoked with `--reasoning-effort high`, so a TUI `default_reasoning_effort = "xhigh"` in `~/.grok/config.toml` does not leak into delegated one-shot calls.
-- Permission-bypass flags are never passed to any CLI.
+- **grok** still pins `--reasoning-effort high` when Settings is “Model decides” and the tool did not pass `effort`, so a TUI `default_reasoning_effort = "xhigh"` in `~/.grok/config.toml` does not leak into delegated one-shot calls.
 - Every run has a hard timeout (default 900s, clamped to 60–3600) and is terminated tree-wide on expiry or cancellation — SIGTERM, then SIGKILL after a 10s grace window.
 
 ## Adding a harness

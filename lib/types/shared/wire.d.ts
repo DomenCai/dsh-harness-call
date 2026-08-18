@@ -17,6 +17,7 @@
  * @module dsh-harness-call/shared/wire
  */
 import type { RunDetail, RunSummary } from './events.ts';
+import type { HarnessCallSettings, HarnessCallSettingsUpdate } from './policy.ts';
 /** npm package name; the Typert contribution and bundle identity. */
 export declare const PACKAGE_NAME = "dsh-harness-call";
 /** Cordis service key and Remote wire namespace. */
@@ -38,6 +39,10 @@ export interface HarnessCallRemote {
      * @returns the detail, or `null` when the run id is unknown.
      */
     get(runId: string, sinceSeq: number): Promise<RunDetail | null>;
+    /** Current per-harness access / effort settings. */
+    getSettings(): Promise<HarnessCallSettings>;
+    /** Persist one field and return the resolved section. */
+    updateSettings(update: HarnessCallSettingsUpdate): Promise<HarnessCallSettings>;
 }
 /**
  * Structural mirror of the Typert protocol's `RemoteResult<T>`: what a Remote
@@ -126,6 +131,49 @@ export declare const HARNESS_CALL_DESCRIPTORS: readonly [{
             parse: (value: unknown) => unknown;
         };
     };
+}, {
+    readonly id: "dsh-harness-call#harnessCall/getSettings";
+    readonly service: "harnessCall";
+    readonly namespace: "harnessCall";
+    readonly method: "getSettings";
+    readonly invocation: {
+        readonly kind: "direct";
+    };
+    readonly parameters: readonly [];
+    readonly result: {
+        readonly mode: "strict";
+        readonly typeSymbol: string;
+        readonly schema: {
+            parse: (value: unknown) => unknown;
+        };
+    };
+}, {
+    readonly id: "dsh-harness-call#harnessCall/updateSettings";
+    readonly service: "harnessCall";
+    readonly namespace: "harnessCall";
+    readonly method: "updateSettings";
+    readonly invocation: {
+        readonly kind: "direct";
+    };
+    readonly parameters: readonly [{
+        readonly name: "update";
+        readonly wire: "update";
+        readonly source: "json";
+        readonly codec: {
+            readonly mode: "strict";
+            readonly typeSymbol: string;
+            readonly schema: {
+                parse: (value: unknown) => unknown;
+            };
+        };
+    }];
+    readonly result: {
+        readonly mode: "strict";
+        readonly typeSymbol: string;
+        readonly schema: {
+            parse: (value: unknown) => unknown;
+        };
+    };
 }];
 /**
  * The contribution the browser mounts through `ctx.remote.$mount`. Structurally
@@ -171,6 +219,49 @@ export declare const HARNESS_CALL_CONTRIBUTION: {
         }, {
             readonly name: "sinceSeq";
             readonly wire: "sinceSeq";
+            readonly source: "json";
+            readonly codec: {
+                readonly mode: "strict";
+                readonly typeSymbol: string;
+                readonly schema: {
+                    parse: (value: unknown) => unknown;
+                };
+            };
+        }];
+        readonly result: {
+            readonly mode: "strict";
+            readonly typeSymbol: string;
+            readonly schema: {
+                parse: (value: unknown) => unknown;
+            };
+        };
+    }, {
+        readonly id: "dsh-harness-call#harnessCall/getSettings";
+        readonly service: "harnessCall";
+        readonly namespace: "harnessCall";
+        readonly method: "getSettings";
+        readonly invocation: {
+            readonly kind: "direct";
+        };
+        readonly parameters: readonly [];
+        readonly result: {
+            readonly mode: "strict";
+            readonly typeSymbol: string;
+            readonly schema: {
+                parse: (value: unknown) => unknown;
+            };
+        };
+    }, {
+        readonly id: "dsh-harness-call#harnessCall/updateSettings";
+        readonly service: "harnessCall";
+        readonly namespace: "harnessCall";
+        readonly method: "updateSettings";
+        readonly invocation: {
+            readonly kind: "direct";
+        };
+        readonly parameters: readonly [{
+            readonly name: "update";
+            readonly wire: "update";
             readonly source: "json";
             readonly codec: {
                 readonly mode: "strict";

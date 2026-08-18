@@ -401,3 +401,85 @@
 .process[open] > summary::before {
   content: '▾ ';
 }
+
+/* ── settings section ── */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settingsTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+}
+
+.settingsDesc,
+.settingsFieldDesc,
+.settingsHint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  opacity: 0.72;
+}
+
+.settingsCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 12px;
+}
+
+.settingsCardTitle {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.settingsField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settingsFieldLabel {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.settingsSelect {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 8px;
+  outline: none;
+  background: inherit;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.settingsSelect:focus {
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+.settingsSelect:disabled {
+  opacity: 0.55;
+}
+
+.settingsError {
+  font-size: 13px;
+  line-height: 20px;
+  opacity: 0.9;
+}
