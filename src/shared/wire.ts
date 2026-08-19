@@ -17,8 +17,8 @@
  * @module dsh-harness-call/shared/wire
  */
 
-import type { RunDetail, RunSummary } from './events.ts'
-import type { HarnessCallSettings, HarnessCallSettingsUpdate } from './policy.ts'
+import type { RunDetail, RunSummary } from './events.js'
+import type { HarnessCallSettings, HarnessCallSettingsUpdate } from './policy.js'
 
 /** npm package name; the Typert contribution and bundle identity. */
 export const PACKAGE_NAME = 'dsh-harness-call'

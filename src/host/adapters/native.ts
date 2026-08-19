@@ -10,7 +10,7 @@
  * @module dsh-harness-call/host/adapters/native
  */
 
-import type { Outcome } from '../adapter.ts'
+import type { Outcome } from '../adapter.js'
 
 /**
  * Whether a value is a keyed object worth reading fields from. Arrays are

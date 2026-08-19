@@ -67,7 +67,7 @@ export type RunMode = 'new' | 'resume'
 export interface RunSummary {
   /** Store-assigned identity of this run, stable for its whole lifetime. */
   runId: string
-  /** Adapter key that produced it (`claude` / `codex` / `grok`). */
+  /** Adapter key that produced it (`claude` / `codex` / `grok` / `kimi`). */
   harness: string
   /**
    * The model tool call this run serves (`exec.callId`), when the host could

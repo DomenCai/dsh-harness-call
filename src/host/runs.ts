@@ -28,8 +28,8 @@ import type {
   RunPhase,
   RunSummary,
   StoredEvent,
-} from '../shared/events.ts'
-import type { RunResult } from './adapter.ts'
+} from '../shared/events.js'
+import type { RunResult } from './adapter.js'
 
 /** Bounds that keep an unattended session from growing without limit. */
 export interface RunStoreOptions {

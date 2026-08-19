@@ -8,13 +8,15 @@
  * @module dsh-harness-call/host/adapters
  */
 
-import type { HarnessAdapterRegistry } from '../adapter.ts'
-import { claudeAdapter } from './claude.ts'
-import { codexAdapter } from './codex.ts'
-import { grokAdapter } from './grok.ts'
+import type { HarnessAdapterRegistry } from '../adapter.js'
+import { claudeAdapter } from './claude.js'
+import { codexAdapter } from './codex.js'
+import { grokAdapter } from './grok.js'
+import { kimiAdapter } from './kimi.js'
 
 export const ADAPTERS: HarnessAdapterRegistry = {
   claude: claudeAdapter,
   codex: codexAdapter,
   grok: grokAdapter,
+  kimi: kimiAdapter,
 }

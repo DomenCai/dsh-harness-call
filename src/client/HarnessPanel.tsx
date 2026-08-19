@@ -20,13 +20,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
-import type { StoredEvent } from '../shared/events.ts'
-import type { HarnessTranslate } from './contracts.ts'
+import type { StoredEvent } from '../shared/events.js'
+import type { HarnessTranslate } from './contracts.js'
 import css from './HarnessCall.module.css'
 import {
   brief, matchRun, seconds, useChannel, useRoster, useRunDetail,
   type HarnessResult, type RunFeed,
-} from './runs.ts'
+} from './runs.js'
 
 /** Cap of the one-line summary a collapsed tool-argument disclosure shows. */
 const INPUT_SUMMARY_CHARACTERS = 72

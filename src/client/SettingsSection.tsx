@@ -4,17 +4,19 @@
  * @module dsh-harness-call/client/SettingsSection
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PropsLocale, PropsRuntime, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
-import { HARNESS_KEYS, HARNESS_LABELS, type HarnessKey } from '../shared/harness.ts'
+import type {} from './contracts.js'
+import { HARNESS_KEYS, HARNESS_LABELS, type HarnessKey } from '../shared/harness.js'
 import {
   ACCESS_SETTINGS,
-  EFFORT_SETTINGS,
+  HARNESS_CAPABILITIES,
+  HARNESS_EFFORT_OPTIONS,
   type AccessSetting,
   type EffortSetting,
   type HarnessCallSettings,
   type HarnessCallSettingsUpdate,
-} from '../shared/policy.ts'
+} from '../shared/policy.js'
 import css from './HarnessCall.module.css'
 
 /** Injected business face: the live scope and durable write verbs. */
@@ -65,6 +67,8 @@ export function HarnessSettingsSection({
   const settings = useScope(snapshot => snapshot.value)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  const [logDirectory, setLogDirectory] = useState(settings.logs.directory)
+  useEffect(() => { setLogDirectory(settings.logs.directory) }, [settings.logs.directory])
 
   const commit = async (next: HarnessCallSettingsUpdate): Promise<void> => {
     setSaving(true)
@@ -90,33 +94,76 @@ export function HarnessSettingsSection({
     medium: t('settings.effort.medium'),
     high: t('settings.effort.high'),
     xhigh: t('settings.effort.xhigh'),
+    max: t('settings.effort.max'),
   }
 
   return (
     <section className={css.settings} aria-labelledby="dsh-harness-call-settings-title">
       <h2 id="dsh-harness-call-settings-title" className={css.settingsTitle}>{t('settings.title')}</h2>
       <p className={css.settingsDesc}>{t('settings.desc')}</p>
+      <div className={css.settingsCard}>
+        <div className={css.settingsCardTitle}>{t('settings.logs.title')}</div>
+        <label className={css.settingsToggle}>
+          <input
+            type="checkbox"
+            checked={settings.logs.enabled}
+            disabled={saving}
+            onChange={event => { void commit({ field: 'logs.enabled', value: event.target.checked }) }}
+          />
+          <span>
+            <span className={css.settingsFieldLabel}>{t('settings.logs.enabled')}</span>
+            <span className={css.settingsFieldDesc}>{t('settings.logs.desc')}</span>
+          </span>
+        </label>
+        <label className={css.settingsField}>
+          <span className={css.settingsFieldLabel}>{t('settings.logs.directory')}</span>
+          <span className={css.settingsFieldDesc}>{t('settings.logs.directoryDesc')}</span>
+          <input
+            className={css.settingsInput}
+            type="text"
+            value={logDirectory}
+            disabled={saving}
+            spellCheck={false}
+            onChange={event => { setLogDirectory(event.target.value) }}
+            onBlur={() => {
+              const value = logDirectory.trim()
+              if (value !== '' && value !== settings.logs.directory) {
+                void commit({ field: 'logs.directory', value })
+              }
+            }}
+            onKeyDown={event => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+            }}
+          />
+        </label>
+        <div className={css.settingsWarning}>{t('settings.logs.warning')}</div>
+      </div>
       {HARNESS_KEYS.map((harness: HarnessKey) => {
         const policy = settings[harness]
+        // A knob the CLI cannot honor is disabled with an explanation rather
+        // than left selectable: a choice nobody reads would be a lie.
+        const capabilities = HARNESS_CAPABILITIES[harness]
         return (
           <div key={harness} className={css.settingsCard}>
             <div className={css.settingsCardTitle}>{HARNESS_LABELS[harness]}</div>
             <FieldSelect
               label={t('settings.access')}
-              description={t('settings.accessDesc')}
+              description={capabilities.access ? t('settings.accessDesc') : t('settings.unsupported')}
               value={policy.access}
               options={ACCESS_SETTINGS}
               optionLabel={value => accessLabels[value]}
-              disabled={saving}
+              disabled={saving || !capabilities.access}
               onChange={value => { void commit({ harness, field: 'access', value }) }}
             />
             <FieldSelect
               label={t('settings.effort')}
-              description={t('settings.effortDesc')}
+              description={capabilities.effort ? t('settings.effortDesc') : t('settings.unsupported')}
               value={policy.effort}
-              options={EFFORT_SETTINGS}
+              // Each CLI has its own effort vocabulary (kimi: low/high/max),
+              // so the menu offers only what this harness's API accepts.
+              options={[...HARNESS_EFFORT_OPTIONS[harness], 'model']}
               optionLabel={value => effortLabels[value]}
-              disabled={saving}
+              disabled={saving || !capabilities.effort}
               onChange={value => { void commit({ harness, field: 'effort', value }) }}
             />
           </div>

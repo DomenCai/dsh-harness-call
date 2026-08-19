@@ -1,7 +1,7 @@
 {
   "name": "dsh-harness-call",
-  "version": "0.1.1",
-  "description": "Delegate work to external coding agents (Claude Code / Codex CLI / Grok CLI) from DeepSeek Harness: a model-facing harness_call tool, @claude/@codex/@grok mentions, live progress cards with a thinking/tool timeline, and a details side panel.",
+  "version": "0.2.0",
+  "description": "Delegate work to external coding agents (Claude Code / Codex CLI / Grok CLI / Kimi CLI) from DeepSeek Harness: a model-facing harness_call tool, @claude/@codex/@grok/@kimi mentions, live progress cards with a thinking/tool timeline, and a details side panel.",
   "license": "MIT",
   "type": "module",
   "main": "./lib/index.js",
@@ -45,6 +45,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "prepare": "pnpm build",
     "watch": "tsc -p tsconfig.json --watch --preserveWatchOutput & tsc -p tsconfig.client.json --watch --preserveWatchOutput & tsdown --watch"
   },
   "keywords": [
@@ -54,6 +55,7 @@
     "claude-code",
     "codex",
     "grok",
+    "kimi",
     "agent-delegation"
   ],
   "repository": {

@@ -14,10 +14,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import type { RunDetail, RunSummary } from '../shared/events.ts'
-import type { HarnessCallSettings, HarnessCallSettingsUpdate } from '../shared/policy.ts'
-import { SERVICE_KEY, type HarnessCallRemote } from '../shared/wire.ts'
-import type { RunStore } from './runs.ts'
+import type { RunDetail, RunSummary } from '../shared/events.js'
+import type { HarnessCallSettings, HarnessCallSettingsUpdate } from '../shared/policy.js'
+import { SERVICE_KEY, type HarnessCallRemote } from '../shared/wire.js'
+import type { RunStore } from './runs.js'
 
 export class HarnessCallRemoteService extends TypertRemoteService implements HarnessCallRemote {
   private readonly runs: RunStore

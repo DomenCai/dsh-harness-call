@@ -2,7 +2,7 @@
  * dsh-harness-call — browser half.
  *
  * Contributions:
- * - an `@` composer trigger source offering @claude / @codex / @grok;
+ * - an `@` composer trigger source offering @claude / @codex / @grok / @kimi;
  * - a `harness_call` tool card showing the live timeline while the external
  *   agent works, and its reply once it finishes;
  * - a floating `shell.overlay` panel with the full timeline and reply text;
@@ -19,15 +19,15 @@ import { useEffect, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { createSnapshotStore, type ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { HARNESS_KEYS } from '../shared/harness.ts'
-import { defaultHarnessCallSettings, type HarnessCallSettingsUpdate } from '../shared/policy.ts'
-import { HARNESS_CALL_CONTRIBUTION, SERVICE_KEY, type HarnessCallRemoteClient } from '../shared/wire.ts'
-import type {} from './contracts.ts'
-import { HarnessCallCard } from './HarnessCallCard.tsx'
-import { HarnessPanel, type PanelTarget } from './HarnessPanel.tsx'
-import { DICTIONARIES, LOCALE_NS } from './locales.ts'
-import { createRunFeed } from './runs.ts'
-import { HarnessSettingsSection, type HarnessSectionInjected } from './SettingsSection.tsx'
+import { HARNESS_KEYS } from '../shared/harness.js'
+import { defaultHarnessCallSettings, type HarnessCallSettingsUpdate } from '../shared/policy.js'
+import { HARNESS_CALL_CONTRIBUTION, SERVICE_KEY, type HarnessCallRemoteClient } from '../shared/wire.js'
+import type {} from './contracts.js'
+import { HarnessCallCard } from './HarnessCallCard.js'
+import { HarnessPanel, type PanelTarget } from './HarnessPanel.js'
+import { DICTIONARIES, LOCALE_NS } from './locales.js'
+import { createRunFeed } from './runs.js'
+import { HarnessSettingsSection, type HarnessSectionInjected } from './SettingsSection.js'
 
 /** The tool this half renders a card for; the keyed-slot cell. */
 const TOOL_NAME = 'harness_call'

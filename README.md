@@ -1,13 +1,13 @@
 # dsh-harness-call
 
-Delegate work to external coding agents — **Claude Code**, **Codex CLI**, **Grok CLI** — from inside [DeepSeek Harness](https://www.npmjs.com/package/@deepseek-ai/dsh) (DSH).
+Delegate work to external coding agents — **Claude Code**, **Codex CLI**, **Grok CLI**, **Kimi CLI** — from inside [DeepSeek Harness](https://www.npmjs.com/package/@deepseek-ai/dsh) (DSH).
 
-One model-facing `harness_call` tool, `@claude` / `@codex` / `@grok` composer mentions, live progress cards with a thinking/tool-call timeline, and a details side panel — with every harness translated into one normalized event model, so adding another CLI is a host-side change only.
+One model-facing `harness_call` tool, `@claude` / `@codex` / `@grok` / `@kimi` composer mentions, live progress cards with a thinking/tool-call timeline, and a details side panel — with every harness translated into one normalized event model, so adding another CLI is a host-side change only.
 
 ## Features
 
 - **`harness_call` tool** — the agent calls any installed harness with a self-contained prompt and gets back the final reply, a bounded process digest (the last 40 events, one line each), and a `runId` handle to the full structured timeline.
-- **`@harness` mentions** — type `@` in the composer to pick `@claude` / `@codex` / `@grok`. A mention is an intent marker, not command syntax: mentions bind to the question that follows them, so `@claude @codex what do you think of X` sends the same question to both, while `@claude review this log @codex write a test` sends two different prompts. Enter on a bare mention is swallowed so the tag stays on one line while you type.
+- **`@harness` mentions** — type `@` in the composer to pick `@claude` / `@codex` / `@grok` / `@kimi`. A mention is an intent marker, not command syntax: mentions bind to the question that follows them, so `@claude @codex what do you think of X` sends the same question to both, while `@claude review this log @codex write a test` sends two different prompts. Enter on a bare mention is swallowed so the tag stays on one line while you type.
 - **Normalized event model** — each adapter translates its CLI's native JSONL into one `HarnessEvent` union (`session` / `reasoning` / `text` / `tool` / `file` / `error` / `usage` / `note`), so the store, the cards and the panel all speak one language and a new harness needs no rendering change.
 - **Runs keyed by `runId`** — the host keeps a run table, not one snapshot per harness: several calls to the same harness run concurrently without overwriting each other. A card finds its own run by the tool `callId`, falling back to the newest run of that harness.
 - **Incremental polling** — the browser asks `get(runId, sinceSeq)` and receives only the events after its cursor; one shared poller (2s) serves every card on the page and stops entirely once no call is live.
@@ -20,7 +20,7 @@ One model-facing `harness_call` tool, `@claude` / `@codex` / `@grok` composer me
 
 - DSH with the web GUI (profile `web`)
 - Node.js >= 20
-- At least one of the CLIs installed and authenticated on PATH: `claude`, `codex`, or `grok`
+- At least one of the CLIs installed and authenticated on PATH: `claude`, `codex`, `grok`, or `kimi`
 
 ## Install
 
@@ -30,7 +30,7 @@ From npm — pinned releases:
 dsh plugin --profile web add dsh-harness-call
 ```
 
-Or straight from GitHub — tracks `main`; the built `lib/` is committed, so nothing has to build on install:
+Or straight from GitHub — tracks `main`; build artifacts are not committed, so pnpm builds on install via the `prepare` script (the installing machine needs Node ≥ 20 and pnpm, and the install is slower than the npm path):
 
 ```sh
 dsh plugin --profile web add github:DomenCai/dsh-harness-call
@@ -53,11 +53,13 @@ Or ask naturally: “让 Claude 看看这个问题”, “对比一下 codex 和
 **Settings → External harnesses** has one card per CLI:
 
 - **Access**: read-only, workspace-write, full access, or **Model decides**
-- **Reasoning effort**: low / medium / high / xhigh, or **Model decides**
+- **Reasoning effort**: low / medium / high / xhigh, or **Model decides** (Kimi's vocabulary is low / high / max; its select offers only those)
 
-A concrete value is applied on the next launch and the tool arguments cannot override it. **Model decides** is the only case that reads this call's `access` / `effort` (`codexSandbox` remains a deprecated alias of `access`).
+A concrete value is applied on the next launch and the tool arguments cannot override it. **Model decides** is the only case that reads this call's `access` / `effort` (`codexSandbox` remains a deprecated alias of `access`); when neither side names a value, that CLI's own configured default applies.
 
-Defaults: Claude and Codex leave both fields to the model; Grok effort is pinned to `high` so an interactive TUI `xhigh` cannot leak in. A process that is already running keeps its original flags. Codex / Grok sandbox flags apply to **new** sessions only; a resume keeps the profile it was created with.
+Defaults: all four harnesses leave both fields to the model. A process that is already running keeps its original flags. Codex / Grok sandbox flags apply to **new** sessions only; a resume keeps the profile it was created with. Kimi's headless mode has no permission switch, so its **Access** field is disabled on the settings page.
+
+The top of the settings page also has an opt-in **Raw log capture** switch, off by default. Once enabled, each subsequent run writes one NDJSON file containing the complete prompt, deduplicated spawn arguments, raw stdout JSONL lines, stderr, normalized adapter events linked to their source sequence, exit facts, and the final verdict. Repeated prompts become references in the spawn record, and explicit environment values whose names look credential-shaped are redacted. The default directory is `~/.dsh/harness-call/logs` and can be changed in Settings. Capture does not change the existing card or details-panel presentation. Files are untruncated, are not cleaned automatically, and may still contain source code and other sensitive information; disable capture and manage the files after sampling.
 
 ## Configuration
 
@@ -78,7 +80,7 @@ The values above are the defaults; omit a key to keep its default.
 - **Access** comes from Settings. Full access maps onto each CLI's widest headless mode (Claude `bypassPermissions`, Codex `danger-full-access` plus approval bypass, Grok `off` plus `bypassPermissions`) — only turn it on in a trusted environment.
 - **codex** still defaults a new session to `read-only` when Settings is “Model decides” and the tool did not pass `access`. A resumed session keeps the sandbox and writable roots it was created with.
 - **claude** runs on its own credential store: `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` are *removed* from the child environment (removed, not blanked), so host-injected gateway credentials never reach it.
-- **grok** still pins `--reasoning-effort high` when Settings is “Model decides” and the tool did not pass `effort`, so a TUI `default_reasoning_effort = "xhigh"` in `~/.grok/config.toml` does not leak into delegated one-shot calls.
+- **kimi** has no permission switch in headless mode (`-p` cannot combine with `--yolo` / `--auto` / `--plan`), so a run always inherits `default_permission_mode` from `~/.kimi-code/config.toml` — the plugin never rewrites that config; make sure it matches your expectation.
 - Every run has a hard timeout (default 900s, clamped to 60–3600) and is terminated tree-wide on expiry or cancellation — SIGTERM, then SIGKILL after a 10s grace window.
 
 ## Adding a harness
@@ -103,9 +105,11 @@ export const myAdapter: HarnessAdapter<MyState> = {
 
 2. `src/host/adapters/index.ts` — add it to `ADAPTERS`.
 3. `src/shared/harness.ts` — add the key to `HARNESS_KEYS` and its label; the tool's `harness` enum and the composer's mention list both derive from there.
-4. `src/client/locales.ts` — one `cand.<key>` line per locale, the mention's description.
+4. `src/shared/policy.ts` — add a defaults row to `defaultHarnessCallSettings()` and declare which knobs the CLI honors in `HARNESS_CAPABILITIES` (an unsupported field is disabled on the settings page).
+5. `src/host/settings.ts` — add one persistence row to `HarnessCallSettingsSchema`.
+6. `src/client/locales.ts` — one `cand.<key>` line per locale, the mention's description.
 
-Both the registry (typed total over `HarnessKey`) and the locale dictionaries are compiler-enforced, so a missed step is a build error rather than a runtime surprise.
+The registry, the settings schema, the capability table (all typed total over `HarnessKey`) and the locale dictionaries are compiler-enforced, so a missed step is a build error rather than a runtime surprise.
 
 ## License
 

@@ -12,9 +12,9 @@
  */
 
 import type { SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
-import type { HarnessEvent, RunMode } from '../shared/events.ts'
-import type { HarnessKey } from '../shared/harness.ts'
-import type { AccessMode, EffortLevel } from '../shared/policy.ts'
+import type { HarnessEvent, RunMode } from '../shared/events.js'
+import type { HarnessKey } from '../shared/harness.js'
+import type { AccessMode, EffortLevel } from '../shared/policy.js'
 
 /** Exit facts of the closed child process, as the subprocess seam reports them. */
 export type Outcome = SubprocessOutcome
@@ -42,8 +42,8 @@ export interface RunRequest {
   readonly access: AccessMode | undefined
   /**
    * Resolved reasoning effort for this spawn. `undefined` means the adapter
-   * must not pass an effort flag — except Grok, which still pins `high` so a
-   * TUI `xhigh` default cannot leak into a delegated call.
+   * must not pass an effort flag (settings said `model` and the tool did not
+   * name one), so the CLI's own config default applies.
    */
   readonly effort: EffortLevel | undefined
   /** Deadline in seconds, already clamped by the orchestrator. */

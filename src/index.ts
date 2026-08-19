@@ -22,16 +22,16 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import type {} from '@deepseek-ai/dsh-settings'
-import { PACKAGE_NAME } from './shared/wire.ts'
-import { HarnessCallRemoteService } from './host/remote.ts'
-import { RunStore } from './host/runs.ts'
+import { PACKAGE_NAME } from './shared/wire.js'
+import { HarnessCallRemoteService } from './host/remote.js'
+import { RunStore } from './host/runs.js'
 import {
   readHarnessCallSettings,
   registerHarnessCallSettings,
   writeHarnessCallSettings,
-} from './host/settings.ts'
-import { createHarnessCallTool, ROUTING_SECTION } from './host/tool.ts'
-import { HARNESS_CALL_MANIFEST } from './host/wire.ts'
+} from './host/settings.js'
+import { createHarnessCallTool, ROUTING_SECTION } from './host/tool.js'
+import { HARNESS_CALL_MANIFEST } from './host/wire.js'
 
 export const name = PACKAGE_NAME
 export const inject = ['subprocess', 'tools', 'systemPrompt', 'typert', 'settings']

@@ -17,8 +17,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { JsonValue, ToolDefinition } from '@deepseek-ai/dsh-tools'
 // Declaration merges only: makes ctx.subprocess and ctx.tools visible.
 import type {} from '@deepseek-ai/dsh-subprocess'
-import type { HarnessEvent, RunMode } from '../shared/events.ts'
-import { HARNESS_KEYS, HARNESS_LABELS } from '../shared/harness.ts'
+import type { HarnessEvent, RunMode } from '../shared/events.js'
+import { HARNESS_KEYS, HARNESS_LABELS } from '../shared/harness.js'
 import {
   ACCESS_MODES,
   EFFORT_LEVELS,
@@ -28,10 +28,11 @@ import {
   type AccessMode,
   type EffortLevel,
   type HarnessCallSettings,
-} from '../shared/policy.ts'
-import type { Outcome, RunRequest, RunResult } from './adapter.ts'
-import { ADAPTERS } from './adapters/index.ts'
-import type { RunStore } from './runs.ts'
+} from '../shared/policy.js'
+import type { Outcome, RunRequest, RunResult } from './adapter.js'
+import { ADAPTERS } from './adapters/index.js'
+import { captureArgv, captureEnv, openRawRunLog, type RawRunLog } from './raw-log.js'
+import type { RunStore } from './runs.js'
 
 /** Model-facing tool name; also the key the browser card renders against. */
 export const TOOL_NAME = 'harness_call'
@@ -104,15 +105,15 @@ function describeEvent(event: HarnessEvent, seconds: number): string {
 /**
  * Routing guidance registered into the global system prompt.
  *
- * It teaches the model that `@claude` / `@codex` / `@grok` are intent markers,
- * not a forwarding syntax: the external agent sees nothing of this
- * conversation, so the model must compose a self-contained prompt rather than
- * pass the remainder of the message through.
+ * It teaches the model that `@claude` / `@codex` / `@grok` / `@kimi` are
+ * intent markers, not a forwarding syntax: the external agent sees nothing of
+ * this conversation, so the model must compose a self-contained prompt rather
+ * than pass the remainder of the message through.
  */
 export const ROUTING_SECTION: string = [
-  '## Harness mentions (@claude / @codex / @grok)',
+  '## Harness mentions (@claude / @codex / @grok / @kimi)',
   '',
-  'The user marks external coding agents with @claude, @codex, or @grok inside a message. A mention is an intent marker, NOT a command syntax: you interpret the message and decide how to handle it, never mechanically forward text.',
+  'The user marks external coding agents with @claude, @codex, @grok, or @kimi inside a message. A mention is an intent marker, NOT a command syntax: you interpret the message and decide how to handle it, never mechanically forward text.',
   '',
   '- Binding by position: a mention naturally scopes over the text that follows it, up to the next mention. "@claude look at this crash log @codex write me a repro test" is two different prompts for two different harnesses. Mentions that cluster before one shared question ("@claude @codex what do you each think of X") all receive that same question.',
   "- Compose the prompt yourself: the external agent sees nothing of this conversation. For each call, build a self-contained prompt — extract the actual question, and add whatever context it needs (relevant code, prior decisions, constraints, file paths). Rewriting, reorganizing, splitting, or expanding the user's phrasing into a clear standalone task is expected and correct; passing the raw remainder verbatim usually is not.",
@@ -123,11 +124,12 @@ export const ROUTING_SECTION: string = [
 ].join('\n')
 
 const TOOL_DESCRIPTION: string = [
-  '调用外部 coding agent（Claude Code / Codex CLI / Grok CLI）执行一次独立提问或委托任务，返回其最终回复文本与过程摘要。',
-  'Call an external coding agent (Claude Code / Codex CLI / Grok CLI) with a self-contained prompt and return its final reply plus a process summary.',
+  '调用外部 coding agent（Claude Code / Codex CLI / Grok CLI / Kimi CLI）执行一次独立提问或委托任务，返回其最终回复文本与过程摘要。',
+  'Call an external coding agent (Claude Code / Codex CLI / Grok CLI / Kimi CLI) with a self-contained prompt and return its final reply plus a process summary.',
   'prompt 必须自包含：外部 agent 看不到当前对话 / The external agent sees nothing of the current conversation.',
   '会话策略：默认自动续接同一 harness 最近一次成功会话；newSession=true 强制新会话；传 sessionId 显式续接。/ Sessions auto-continue per harness by default; newSession=true forces a fresh one.',
   '权限与思考档位以设置页为准；仅当对应项设为「模型决定」时才读 access / effort（或旧的 codexSandbox）。/ Access and effort come from Settings; pass access/effort only when that setting is "model decides".',
+  'kimi 的 headless 模式没有权限开关，access 对 kimi 无效。/ kimi has no headless permission switch; access is ignored for kimi.',
   'timeoutSeconds 默认 900（60-3600）。cwd 默认当前工作区。',
 ].join(' ')
 
@@ -144,6 +146,8 @@ export function createHarnessCallTool(
   store: RunStore,
   readSettings: () => HarnessCallSettings,
 ): ToolDefinition {
+  const logger = ctx.logger('dsh-harness-call')
+
   /**
    * Most recent SUCCESSFUL session per harness — the default auto-continue
    * target. Closure state, so it lives and dies with the plugin fiber: a
@@ -185,7 +189,7 @@ export function createHarnessCallTool(
       effort: {
         type: 'string',
         enum: EFFORT_LEVELS,
-        description: '仅当设置页该项为「模型决定」时生效：low / medium / high / xhigh / Only used when Settings effort is "model decides"',
+        description: '仅当设置页该项为「模型决定」时生效：low / medium / high / xhigh，kimi 仅支持 low / high / max / Only used when Settings effort is "model decides"; kimi accepts only low / high / max',
       },
       codexSandbox: {
         type: 'string',
@@ -244,7 +248,8 @@ export function createHarnessCallTool(
           ? args.codexSandbox
           : undefined
       const effortOverride: EffortLevel | undefined = isEffortLevel(args.effort) ? args.effort : undefined
-      const policy = resolveRunPolicy(readSettings(), harness, {
+      const settings = readSettings()
+      const policy = resolveRunPolicy(settings, harness, {
         access: accessOverride,
         effort: effortOverride,
       })
@@ -259,6 +264,7 @@ export function createHarnessCallTool(
       }
 
       const startedAt = Date.now()
+      const callId = String(exec.callId)
       const run = store.open({
         harness,
         label,
@@ -269,8 +275,32 @@ export function createHarnessCallTool(
         // The one reliable link from a still-running card back to ITS run: the
         // tool result carries `runId`, but a card that has not settled yet only
         // knows the call it was rendered for.
-        callId: String(exec.callId),
+        callId,
       })
+      let rawLog: RawRunLog | undefined
+      if (settings.logs.enabled) {
+        const openedLog = await openRawRunLog({
+          directory: settings.logs.directory,
+          runId: run.runId,
+          callId,
+          harness,
+          label,
+          mode,
+          sessionId,
+          cwd,
+          prompt: args.prompt,
+          access: policy.access,
+          effort: policy.effort,
+          timeoutSeconds,
+          startedAt,
+        })
+        if (openedLog.capture !== undefined) {
+          rawLog = openedLog.capture
+          logger.info('run %s raw log: %s', run.runId, rawLog.path)
+        } else if (openedLog.error !== undefined) {
+          logger.warn('run %s continues without raw capture: %s', run.runId, openedLog.error)
+        }
+      }
 
       /**
        * The model-facing timeline is NOT built from the raw stream. Grok's
@@ -305,13 +335,25 @@ export function createHarnessCallTool(
        */
       try {
         const spec = adapter.build(req)
+        rawLog?.write('spawn.spec', {
+          executable: adapter.bin,
+          argv: captureArgv(spec.argv, req.prompt),
+          stdin: spec.stdin === req.prompt ? { ref: 'run.start.prompt' } : spec.stdin,
+          env: captureEnv(spec.env),
+        })
         let bin: string
         try {
           bin = await ctx.subprocess.resolveExecutable(adapter.bin, undefined, exec.signal)
-        } catch {
+          rawLog?.write('spawn.resolved', { executable: bin })
+        } catch (error) {
           // Lookup can fail in an execution world with a narrow PATH; the bare
           // name may still resolve for the child, so failing here would be worse
           // than letting the spawn report the real problem.
+          rawLog?.write('spawn.resolve_failed', {
+            executable: adapter.bin,
+            error: errorMessage(error),
+            fallback: adapter.bin,
+          })
           bin = adapter.bin
         }
 
@@ -329,11 +371,13 @@ export function createHarnessCallTool(
           // and so its `undefined` tombstones survive into the spawn spec.
           env: { CLICOLOR: '0', NO_COLOR: '1', ...spec.env },
         })
+        rawLog?.write('process.spawned', { pid: child.pid })
         run.markRunning()
 
         const state = adapter.createState()
         let timedOut = false
         let stderrTail = ''
+        let stdoutBuffer = ''
         /**
          * `child.done` has settled, so the run's outcome is decided.
          *
@@ -349,43 +393,61 @@ export function createHarnessCallTool(
          */
         let settled = false
 
-        const consumeLine = (rawLine: string): void => {
+        const consumeLine = (rawLine: string, terminated: boolean): void => {
           const line = rawLine.trim()
-          if (line.length === 0) return
+          if (line.length === 0) {
+            rawLog?.write('stdout', { raw: rawLine, terminated, parsed: false, empty: true })
+            return
+          }
           let native: unknown
+          let sourceSeq: number | undefined
           try {
             native = JSON.parse(line)
-          } catch {
+            // Keep exactly one copy of the native frame. Anyone analyzing the
+            // transcript can parse `raw` again; persisting `native` duplicated
+            // the largest payload without adding evidence.
+            sourceSeq = rawLog?.write('stdout', { raw: rawLine, terminated, parsed: true })
+          } catch (error) {
+            rawLog?.write('stdout', {
+              raw: rawLine,
+              terminated,
+              parsed: false,
+              parseError: errorMessage(error),
+            })
             // Harness CLIs interleave non-JSON banners with their JSONL stream;
-            // a line we cannot parse is noise, not a run failure.
+            // a line we cannot parse is noise to the semantic adapter, but the
+            // opt-in raw transcript above keeps it for later diagnosis.
             return
           }
           try {
-            record(adapter.translate(native, state))
+            const events = adapter.translate(native, state)
+            if (events.length > 0) rawLog?.write('semantic', { sourceSeq: sourceSeq ?? null, events })
+            record(events)
           } catch (error) {
             // A malformed native event must not abort a run that is otherwise
             // healthy — the harness owns the wire format and can change it.
+            rawLog?.write('adapter.translate_failed', { sourceSeq: sourceSeq ?? null, error: errorMessage(error) })
             record([{ kind: 'error', message: `translate failed: ${errorMessage(error)}` }])
           }
         }
 
         if (child.stdout !== undefined) {
           child.stdout.setEncoding('utf8')
-          let buffer = ''
           child.stdout.on('data', (chunk: string) => {
             if (settled) return
-            buffer += chunk
-            let index = buffer.indexOf('\n')
+            stdoutBuffer += chunk
+            let index = stdoutBuffer.indexOf('\n')
             while (index !== -1) {
-              consumeLine(buffer.slice(0, index))
-              buffer = buffer.slice(index + 1)
-              index = buffer.indexOf('\n')
+              consumeLine(stdoutBuffer.slice(0, index), true)
+              stdoutBuffer = stdoutBuffer.slice(index + 1)
+              index = stdoutBuffer.indexOf('\n')
             }
           })
         }
         if (child.stderr !== undefined) {
           child.stderr.setEncoding('utf8')
           child.stderr.on('data', (chunk: string) => {
+            rawLog?.write('stderr', { raw: chunk })
             stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_CHARACTERS)
           })
         }
@@ -406,6 +468,7 @@ export function createHarnessCallTool(
           releaseDeadline = ctx.effect(() => {
             const timer = setTimeout(() => {
               timedOut = true
+              rawLog?.write('process.timeout', { timeoutSeconds })
               record([{ kind: 'error', message: `timeout after ${timeoutSeconds}s, terminating process` }])
               child.terminate()
             }, timeoutSeconds * 1000)
@@ -415,7 +478,9 @@ export function createHarnessCallTool(
           }, `${TOOL_NAME}: ${harness} deadline`)
 
           outcome = await child.done
+          rawLog?.write('process.closed', { exitCode: outcome.exitCode, signal: outcome.signal })
         } catch (error) {
+          rawLog?.write('process.failed', { error: errorMessage(error) })
           // The only reaper of this process is the effect disposer, and reaching
           // here means either that effect never registered or the process never
           // closed. Terminate before the failure propagates, so no path out of
@@ -424,6 +489,10 @@ export function createHarnessCallTool(
           throw error
         } finally {
           settled = true
+          if (stdoutBuffer.length > 0) {
+            consumeLine(stdoutBuffer, false)
+            stdoutBuffer = ''
+          }
           if (releaseDeadline !== undefined) void releaseDeadline()
           if (releaseChild !== undefined) void releaseChild()
         }
@@ -439,6 +508,7 @@ export function createHarnessCallTool(
         } catch (error) {
           // Classification is the adapter's last chance to speak; if it throws we
           // still owe the caller a settled run rather than a thrown tool.
+          rawLog?.write('adapter.finalize_failed', { error: errorMessage(error) })
           finished = {
             ok: false,
             text: state.text,
@@ -451,6 +521,15 @@ export function createHarnessCallTool(
         const errors = [...finished.errors]
         if (exec.signal.aborted && !finished.ok) errors.push('cancelled by caller')
         const ok = finished.ok && errors.length === 0
+        rawLog?.write('adapter.finalized', {
+          ok,
+          text: finished.text,
+          sessionId: finished.sessionId,
+          errors,
+          extras: finished.extras,
+          timedOut,
+          aborted: exec.signal.aborted,
+        })
 
         if (ok && finished.sessionId !== null) lastSessions.set(harness, finished.sessionId)
         run.finish({
@@ -475,6 +554,12 @@ export function createHarnessCallTool(
           .map(event => describeEvent(event, Math.round(event.at / 1000)))
 
         const stderrLines = stderrTail.trim()
+        await rawLog?.close({
+          ok,
+          elapsedMs: Date.now() - startedAt,
+          semanticEventCount: steps,
+          captureError: rawLog.error ?? null,
+        })
         return {
           ok,
           // The handle back to the full structured timeline the store retains.
@@ -502,6 +587,8 @@ export function createHarnessCallTool(
         // instead of one stuck at `running`.
         const message = `${harness} run failed: ${errorMessage(error)}`
         run.finish({ ok: false, text: '', sessionId: null, errors: [message], extras: {} })
+        rawLog?.write('run.failed', { error: message, aborted: exec.signal.aborted })
+        await rawLog?.close({ ok: false, elapsedMs: Date.now() - startedAt, captureError: rawLog.error ?? null })
         return { ok: false, runId: run.runId, harness, label, mode, cwd, errors: [message] }
       }
     },

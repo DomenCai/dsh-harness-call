@@ -23,8 +23,8 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
-import type { RunDetail, RunSummary, StoredEvent } from '../shared/events.ts'
-import type { HarnessCallRemoteClient } from '../shared/wire.ts'
+import type { RunDetail, RunSummary, StoredEvent } from '../shared/events.js'
+import type { HarnessCallRemoteClient } from '../shared/wire.js'
 
 /**
  * Poll cadence of both the roster and the focused run. The host store is

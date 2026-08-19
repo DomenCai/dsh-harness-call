@@ -7,10 +7,10 @@
  * @module dsh-harness-call/host/adapters/claude
  */
 
-import { HARNESS_LABELS } from '../../shared/harness.ts'
-import type { HarnessEvent } from '../../shared/events.ts'
-import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.ts'
-import { exitFailure, isRecord, readNumber, readRecord, readString } from './native.ts'
+import { HARNESS_LABELS } from '../../shared/harness.js'
+import type { HarnessEvent } from '../../shared/events.js'
+import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.js'
+import { exitFailure, isRecord, readNumber, readRecord, readString } from './native.js'
 
 /**
  * Claude reports the run's verdict in one terminal `result` event carrying the

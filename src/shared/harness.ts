@@ -12,7 +12,7 @@
  */
 
 /** Harness keys in the order the model and the composer see them. */
-export const HARNESS_KEYS = ['claude', 'codex', 'grok'] as const
+export const HARNESS_KEYS = ['claude', 'codex', 'grok', 'kimi'] as const
 
 /** Key of a supported external harness. */
 export type HarnessKey = (typeof HARNESS_KEYS)[number]
@@ -22,6 +22,7 @@ export const HARNESS_LABELS: Readonly<Record<HarnessKey, string>> = {
   claude: 'Claude Code',
   codex: 'Codex',
   grok: 'Grok',
+  kimi: 'Kimi',
 }
 
 /** Narrow an untrusted model-supplied value to a known harness key. */

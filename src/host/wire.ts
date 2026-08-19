@@ -23,7 +23,7 @@ import {
   PACKAGE_NAME,
   SERVICE_KEY,
   type RemoteOutcome,
-} from '../shared/wire.ts'
+} from '../shared/wire.js'
 
 /**
  * Compile-time proof that the shared, dependency-free {@link RemoteOutcome}

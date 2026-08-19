@@ -29,7 +29,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Declaration merges only: ctx.inputTriggers.
 import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
-import type { LOCALE_NS, LocaleKey } from './locales.ts'
+import type { LOCALE_NS, LocaleKey } from './locales.js'
 
 /** This half's translate function, typed to ./locales.ts. */
 export type HarnessTranslate = TranslateNS<typeof LOCALE_NS>

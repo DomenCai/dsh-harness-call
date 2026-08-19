@@ -4,19 +4,19 @@
  * Session handling: `--session-id <id>` opens a run on a caller-chosen id,
  * `--resume <id>` continues one. Unlike the other two harnesses the prompt is
  * an argument, not stdin, so this adapter spawns with no stdin at all.
- * Reasoning defaults to `--reasoning-effort high` so a TUI `xhigh` default
- * cannot leak into delegated one-shot calls; a concrete settings or tool
- * override replaces that pin. Access maps onto built-in sandbox profiles
+ * Reasoning effort is passed as `--reasoning-effort` only when one was
+ * resolved (a concrete setting or a tool argument); otherwise the CLI's own
+ * config default applies. Access maps onto built-in sandbox profiles
  * (`read-only` / `workspace` / `off`) plus `dontAsk` so headless runs do
  * not stall on an approval prompt this plugin cannot answer.
  *
  * @module dsh-harness-call/host/adapters/grok
  */
 
-import { HARNESS_LABELS } from '../../shared/harness.ts'
-import type { HarnessEvent } from '../../shared/events.ts'
-import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.ts'
-import { exitFailure, isRecord, readNumber, readString } from './native.ts'
+import { HARNESS_LABELS } from '../../shared/harness.js'
+import type { HarnessEvent } from '../../shared/events.js'
+import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.js'
+import { exitFailure, isRecord, readNumber, readString } from './native.js'
 
 /**
  * Grok streams the reply as `text` deltas and reasoning as per-token `thought`
@@ -61,10 +61,10 @@ export const grokAdapter: HarnessAdapter<GrokState> = {
       '--background-wait-timeout',
       String(req.timeoutSeconds),
     ]
-    // A missing effort still pins `high`: ~/.grok/config.toml can set
-    // default_reasoning_effort = "xhigh", and inheriting that turned a
-    // 300-character fable into a 2-minute, 3-loop run.
-    argv.push('--reasoning-effort', req.effort ?? 'high')
+    // Effort is passed only when one was resolved: a silent caller means the
+    // user's own ~/.grok/config.toml default applies, and this plugin does not
+    // second-guess it.
+    if (req.effort !== undefined) argv.push('--reasoning-effort', req.effort)
     // Sandbox is locked to the profile the session was created with;
     // restating a different one on `--resume` is a hard error.
     if (req.mode === 'new' && req.access === 'read-only') {

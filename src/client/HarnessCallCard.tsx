@@ -18,12 +18,12 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionId, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
-import type { RunSummary } from '../shared/events.ts'
-import { HARNESS_LABELS, isHarnessKey } from '../shared/harness.ts'
-import type { HarnessTranslate } from './contracts.ts'
-import type { PanelTarget } from './HarnessPanel.tsx'
+import type { RunSummary } from '../shared/events.js'
+import { HARNESS_LABELS, isHarnessKey } from '../shared/harness.js'
+import type { HarnessTranslate } from './contracts.js'
+import type { PanelTarget } from './HarnessPanel.js'
 import css from './HarnessCall.module.css'
-import { brief, matchRun, readArgs, readResult, seconds, useChannel, useRoster, type RunFeed } from './runs.ts'
+import { brief, matchRun, readArgs, readResult, seconds, useChannel, useRoster, type RunFeed } from './runs.js'
 
 /** Cap of the prompt excerpt shown on a running card. */
 const PROMPT_EXCERPT_CHARACTERS = 140

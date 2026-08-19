@@ -455,7 +455,8 @@
   line-height: 20px;
 }
 
-.settingsSelect {
+.settingsSelect,
+.settingsInput {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -470,12 +471,46 @@
   font-size: 13px;
 }
 
-.settingsSelect:focus {
+.settingsInput {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.settingsSelect:focus,
+.settingsInput:focus {
   border-color: color-mix(in srgb, currentColor 55%, transparent);
 }
 
-.settingsSelect:disabled {
+.settingsSelect:disabled,
+.settingsInput:disabled {
   opacity: 0.55;
+}
+
+.settingsToggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.settingsToggle input {
+  flex: none;
+  margin-top: 4px;
+}
+
+.settingsToggle > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settingsWarning {
+  padding: 8px 10px;
+  border-left: 2px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  font-size: 12px;
+  line-height: 18px;
+  opacity: 0.82;
 }
 
 .settingsError {
