@@ -51,14 +51,10 @@ const zh = {
   'panel.expired': 'Run 已过期（host 重启）',
 
   'activity.running': '运行中',
-  'activity.done': '完成',
-  'activity.failed': '失败',
   'activity.input': '参数',
   'activity.output': '输出',
   'activity.orphans': '{n} 个工具的起始记录已被截断',
   'activity.truncated': '显示 {shown} / {original}',
-  'activity.expand': '展开其余 {n} 行',
-  'activity.collapse': '折叠输出',
   'sidebar.run': 'Harness Run',
 
   'event.session': '会话',
@@ -149,14 +145,10 @@ const en: Record<LocaleKey, string> = {
   'panel.expired': 'Run expired (host restarted)',
 
   'activity.running': 'running',
-  'activity.done': 'done',
-  'activity.failed': 'failed',
   'activity.input': 'arguments',
   'activity.output': 'output',
   'activity.orphans': '{n} tool starts were discarded',
   'activity.truncated': 'showing {shown} / {original}',
-  'activity.expand': 'Show {n} hidden lines',
-  'activity.collapse': 'Collapse output',
   'sidebar.run': 'Harness Run',
 
   'event.session': 'session',

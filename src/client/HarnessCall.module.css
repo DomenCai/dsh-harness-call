@@ -236,11 +236,6 @@
   margin-top: 2px;
 }
 
-.panelText {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 .hint {
   opacity: 0.6;
 }
@@ -583,58 +578,79 @@
   line-height: 1.6;
 }
 
-.toolCard,
-.toolCardCompact {
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, currentColor 4%, transparent);
-}
+/* ── tool rows ──
+ *
+ * The shell's own tool rows are the model: a one-line disclosure whose leading
+ * glyph turns into a chevron, the tool name, then the file or command it was
+ * about. The row draws no box of its own — the expanded block is the surface.
+ */
 
-.toolCardCompact {
-  padding: 6px 8px;
-}
-
-.toolCardHead {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.toolRow {
   min-width: 0;
 }
 
-.toolCardMeta {
-  margin-left: auto;
-  font-size: 11px;
-  opacity: 0.7;
+.toolTarget {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  opacity: 0.75;
 }
 
-.toolTerminal,
-.toolOutput {
-  margin-top: 8px;
-  min-width: 0;
-}
-
-.toolOutputLabel {
-  margin-bottom: 4px;
-  font-size: 11px;
-  font-weight: 600;
+/* The shell separates a tool name from its subject with a dot; the row itself
+   lays out its children with no gap, so the separator carries the spacing. */
+.toolTarget::before {
+  content: '·';
+  margin: 0 6px;
   opacity: 0.6;
 }
 
-.toolTruncated,
-.toolCapToggle {
+.toolTail {
+  flex: none;
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 11px;
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
+.toolBody {
+  min-width: 0;
+}
+
+/*
+ * The shell's blocks are sized for the conversation column: 16px outer margins
+ * and the 13px code font. Here they are a tool row's payload inside a 520px
+ * panel, so the small code font the shell's own tool rows use is set instead,
+ * on the token itself — ReadBlock's body reads the token directly, not the
+ * per-block `--dsl-*` knob. The margin needs `!important`: the blocks' own
+ * `:not(:last-child)` rule outranks a single class of ours.
+ */
+.toolTerminal,
+.toolCode {
+  --dsw-font-markdown-code-block: var(--dsw-font-markdown-code-block-small);
+  margin: 6px 0 0 !important;
+  min-width: 0;
+}
+
+.toolTerminal {
+  --dsl-terminal-line-height: 18px;
+  --dsl-terminal-output-max-height: 224px;
+}
+
+/* CodeBlock's banner is sticky by design in the conversation. Inside the run
+   view that makes it attach to the outer sidebar scroller and float over later
+   timeline rows. A non-scrolling clip makes this block the sticky containing
+   box, so the banner leaves with its own output while horizontal code scrolling
+   continues in the primitive's inner viewport. */
+.toolCode {
+  overflow: hidden;
+}
+
+.toolTruncated {
   margin-top: 6px;
   font-size: 11px;
   opacity: 0.7;
-}
-
-.toolCapToggle {
-  padding: 0;
-  border: none;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  text-decoration: underline;
 }

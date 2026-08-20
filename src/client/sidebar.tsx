@@ -1,8 +1,7 @@
 /**
  * Optional Better Sidebar integration: register a hidden run tab and route
- * card clicks into it when the panel is currently visible. Overlay remains
- * the fallback when the service is missing, too old, or the workbench is
- * collapsed (type-only openTab does not reveal a folded panel).
+ * every card click into it. The floating panel is the fallback for one case
+ * only — Better Sidebar is absent or too old to take the open.
  *
  * Runtime collaboration is through ctx.get / ctx.inject. Types are restated
  * in ./contracts.ts so this file never value-imports the sidebar package.
@@ -16,7 +15,6 @@ import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
   BetterSidebarService,
   HarnessTranslate,
-  SidebarSnapshot,
   TabComponentProps,
 } from './contracts.js'
 import { HarnessRunView } from './HarnessRunView.js'
@@ -24,28 +22,8 @@ import type { HarnessResult, PanelTarget, RunFeed } from './runs.js'
 
 export const RUN_TAB_TYPE = 'dsh-harness-call:run'
 
-const NARROW_MAX_WIDTH = 768
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function treeHasId(node: unknown, id: string): boolean {
-  if (!isRecord(node)) return false
-  if (node.id === id) return true
-  const children = node.children
-  if (!Array.isArray(children)) return false
-  return children.some(child => treeHasId(child, id))
-}
-
-function sidebarVisible(snapshot: SidebarSnapshot): boolean {
-  const state = snapshot.state
-  if (state === undefined) return false
-  const narrow = typeof window !== 'undefined' && window.innerWidth < NARROW_MAX_WIDTH
-  if (narrow) return state.panelOpen
-  const pane = state.activePane
-  if (typeof pane === 'string' && treeHasId(state.bottomSplits, pane)) return state.bottomOpen
-  return state.panelOpen
 }
 
 function hasFeature(service: BetterSidebarService, name: string): boolean {
@@ -108,18 +86,24 @@ function readMeta(meta: unknown): PanelTarget | undefined {
   }
 }
 
-/** Open the run in a sidebar tab when the workbench is in sight; otherwise false. */
+/** Open the run in a sidebar tab; `false` means Better Sidebar cannot take it. */
 export function tryOpenSidebarTab(ctx: ClientContext, target: PanelTarget, t: HarnessTranslate): boolean {
   const sidebar = ctx.get('betterSidebar')
   if (sidebar === undefined) return false
   if (!hasFeature(sidebar, 'targetedOpen') || !hasFeature(sidebar, 'tabMeta')) return false
   if (sidebar.getTab(RUN_TAB_TYPE) === undefined) return false
-  if (!sidebarVisible(sidebar.getSnapshot())) return false
   sidebar.openTab(
     {
       type: RUN_TAB_TYPE,
       id: `harness-run-${target.callId}`,
       title: t('sidebar.run'),
+      // A collapsed panel does not reveal itself for a type-only open: Better
+      // Sidebar expands the landing panel for CONTENT opens only, and it
+      // recognizes those by the seed carrying a path. A run is content — it
+      // just is not a file, so the handle stands in for one. Nothing reads it
+      // back: the tab renders from `meta`, and the sidebar only carries and
+      // persists `path`.
+      path: `harness-run:${target.runId ?? target.callId}`,
       meta: {
         callId: target.callId,
         runId: target.runId,

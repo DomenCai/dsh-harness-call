@@ -145,6 +145,63 @@ export function isCommandTool(name: string): boolean {
 }
 
 /**
+ * The one input field worth putting beside the tool name on a collapsed row —
+ * the path, pattern, or URL that says WHICH file or query this call was about.
+ * Anything else stays folded in the input block.
+ */
+const SUMMARY_FIELDS = ['file_path', 'filePath', 'path', 'pattern', 'query', 'url'] as const
+
+/** The collapsed row's subtitle, when the arguments name one. */
+export function primaryArgument(input: unknown): string | undefined {
+  if (typeof input === 'string') return input.length > 0 ? input : undefined
+  if (typeof input !== 'object' || input === null) return undefined
+  const record = input as Record<string, unknown>
+  for (const field of SUMMARY_FIELDS) {
+    const value = record[field]
+    if (typeof value === 'string' && value.length > 0) return value
+  }
+  return undefined
+}
+
+/** One gutter-numbered line of a read result. */
+export interface NumberedLine {
+  number: number
+  text: string
+}
+
+/**
+ * Parse a `cat -n`-style read result — the shape Claude Code's Read and its
+ * peers return — into gutter lines, so it can render as a file view instead of
+ * a wall of text with the numbers baked into it.
+ *
+ * All or nothing: one unnumbered line means this is not a read window (a tool
+ * that prints a trailing summary, a diff, a JSON blob), and a partially
+ * renumbered view would be a lie about the file.
+ */
+export function parseNumberedLines(output: string): NumberedLine[] | undefined {
+  const lines = output.replace(/\n$/, '').split('\n')
+  if (lines.length < 2) return undefined
+  const parsed: NumberedLine[] = []
+  let previous = 0
+  for (const line of lines) {
+    const match = /^\s*(\d+)\t(.*)$/.exec(line)
+    if (match === null) return undefined
+    const number = Number(match[1])
+    if (number <= previous) return undefined
+    previous = number
+    parsed.push({ number, text: match[2] ?? '' })
+  }
+  return parsed
+}
+
+/** Grammar hint for a path, for the blocks that syntax-highlight. */
+export function languageOf(path: string | undefined): string | undefined {
+  if (path === undefined) return undefined
+  const extension = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
+  return /^[a-z0-9]{1,12}$/.test(extension) && extension.length < path.length ? extension : undefined
+}
+
+/**
  * A legacy one-shot tool event as a settled card, so pre-protocol runs still
  * render. The callId is only a React key — it is never sent back.
  */

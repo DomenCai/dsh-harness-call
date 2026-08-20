@@ -49,23 +49,12 @@ export interface SidebarTab {
   meta?: unknown
 }
 
-export interface SidebarState {
-  panelOpen: boolean
-  bottomOpen: boolean
-  activePane: string | null
-  splits: unknown
-  bottomSplits: unknown
-}
-
-export interface SidebarSnapshot {
-  sessionId?: string
-  state?: SidebarState
-}
-
 export interface OpenTabSeed {
   type: string
   title?: string
   id?: string
+  /** Marks the open as a content open, which lands in sight of a collapsed panel. */
+  path?: string
   meta?: unknown
 }
 
@@ -93,7 +82,6 @@ export interface BetterSidebarService {
   registerTab(descriptor: TabDescriptor): () => void
   getTab(id: string): TabDescriptor | undefined
   openTab(seed: OpenTabSeed, scope?: SessionScope): void
-  getSnapshot(): SidebarSnapshot
   readonly features: readonly string[]
 }
 

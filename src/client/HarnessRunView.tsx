@@ -53,7 +53,7 @@ function eventBody(event: StoredEvent, t: HarnessTranslate, cwd: string | undefi
     case 'text':
       return event.text
     case 'tool':
-      return <ToolActivityCard activity={legacyToolActivity(event)} t={t} cwd={cwd} compact />
+      return <ToolActivityCard activity={legacyToolActivity(event)} t={t} cwd={cwd} />
     case 'tool_start':
     case 'tool_finish':
     case 'usage':
@@ -226,9 +226,10 @@ export function HarnessRunView(props: {
         {text.length > 0 && (
           <>
             <div className={css.sectionLabel}>{t(done ? 'panel.reply' : 'panel.replyRunning')}</div>
-            <div className={css.panelText}>
-              <MarkdownText text={text} streaming={!done} />
-            </div>
+            {/* No wrapper: MarkdownText emits real newline text nodes between
+                its blocks, so any inherited `white-space: pre-wrap` turns every
+                block boundary into a blank line. */}
+            <MarkdownText text={text} streaming={!done} />
           </>
         )}
         {empty && !runExpired && <div className={css.hint}>{t('panel.noOutput')}</div>}

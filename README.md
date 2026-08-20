@@ -13,7 +13,7 @@ One model-facing `harness_call` tool, `@claude` / `@codex` / `@grok` / `@kimi` c
 - **Incremental polling** — the browser asks `get(runId, sinceSeq)` and receives only the events after its cursor; one shared poller (2s) serves every card on the page and stops entirely once no call is live.
 - **Process timeline** — clicking a card opens the floating panel: the process list is collapsed on a finished run (open while it is still live), reasoning is de-emphasized, tool calls show their exit code and **complete** arguments behind a disclosure, and cost/turn accounting sits in the footer.
 - **No silent truncation** — when a run's ring buffer evicts, the count is reported as `droppedEvents` and the panel says the timeline starts mid-run.
-- **Session auto-continue** — each harness continues its own most recent *successful* session by default, so multi-turn follow-ups share context; `newSession` / `sessionId` override.
+- **Session auto-continue** — each harness continues its own most recent *successful* session by default, so multi-turn follow-ups share context; `newSession` / `sessionId` override. Independent `harness_call`s run in parallel. If two calls target the same harness at once, only the first auto-continues; the rest open a fresh session so they do not share a live CLI conversation.
 - **Adapter architecture** — one harness is one adapter (`build` argv / `translate` events / `finalize` verdict) under [`src/host/adapters/`](src/host/adapters); run identity, sequence numbers, relative timestamps and retention belong to the store, not to the adapters.
 
 ## Requirements
