@@ -33,6 +33,7 @@ import type { Outcome, RunRequest, RunResult } from './adapter.js'
 import { ADAPTERS } from './adapters/index.js'
 import { captureArgv, captureEnv, openRawRunLog, type RawRunLog } from './raw-log.js'
 import type { RunStore } from './runs.js'
+import { utf8ByteLength } from './truncate.js'
 
 /** Model-facing tool name; also the key the browser card renders against. */
 export const TOOL_NAME = 'harness_call'
@@ -91,15 +92,49 @@ function describeEvent(event: HarnessEvent, seconds: number): string {
       if (event.input !== undefined) parts.push(brief(event.input, TIMELINE_LINE_CHARACTERS))
       return parts.join(' ')
     }
+    case 'tool_start': {
+      const parts = [at, 'tool', event.name]
+      if (event.input !== undefined) parts.push(brief(event.input, TIMELINE_LINE_CHARACTERS))
+      return parts.join(' ')
+    }
+    case 'tool_finish': {
+      const parts = [at, 'tool', event.name]
+      if (event.exitCode !== undefined) parts.push(`exit=${event.exitCode}`)
+      if (event.output !== undefined) {
+        const bytes = event.outputOriginalBytes ?? utf8ByteLength(event.output)
+        parts.push(`output=${formatBytes(bytes)}`)
+      }
+      return parts.join(' ')
+    }
     case 'file':
       return `${at} file ${event.change} ${event.path}`
     case 'error':
       return `${at} error ${brief(event.message, TIMELINE_LINE_CHARACTERS)}`
-    case 'usage':
-      return `${at} usage cost=${event.costUsd ?? '-'} turns=${event.turns ?? '-'}`
+    case 'usage': {
+      const parts = [at, 'usage']
+      if (event.costUsd !== undefined) parts.push(`cost=${event.costUsd}`)
+      if (event.turns !== undefined) parts.push(`turns=${event.turns}`)
+      if (event.inputTokens !== undefined) parts.push(`in=${event.inputTokens}`)
+      if (event.outputTokens !== undefined) parts.push(`out=${event.outputTokens}`)
+      if (event.cachedTokens !== undefined) parts.push(`cached=${event.cachedTokens}`)
+      if (event.reasoningTokens !== undefined) parts.push(`reason=${event.reasoningTokens}`)
+      if (event.model !== undefined) parts.push(event.model)
+      return parts.length === 2 ? `${at} usage` : parts.join(' ')
+    }
     case 'note':
       return `${at} note ${brief(event.text, TIMELINE_LINE_CHARACTERS)}`
   }
+}
+
+/** Compact byte count for the model-facing digest (`5.4K`, `1.2M`). */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) {
+    const k = bytes / 1024
+    return `${k >= 10 ? k.toFixed(0) : k.toFixed(1)}K`
+  }
+  const m = bytes / (1024 * 1024)
+  return `${m >= 10 ? m.toFixed(0) : m.toFixed(1)}M`
 }
 
 /**

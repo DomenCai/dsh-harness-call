@@ -30,6 +30,7 @@ import type {
   StoredEvent,
 } from '../shared/events.js'
 import type { RunResult } from './adapter.js'
+import { DEFAULT_MAX_TOOL_OUTPUT_BYTES, truncateHeadTail } from './truncate.js'
 
 /** Bounds that keep an unattended session from growing without limit. */
 export interface RunStoreOptions {
@@ -100,6 +101,11 @@ interface RunRecord {
   lastEventKind?: HarnessEventKind
   costUsd?: number
   turns?: number
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  reasoningTokens?: number
+  model?: string
   /**
    * Reply text. While the run is live this accumulates `text` events; the
    * harnesses disagree about what a reply delta even is (codex replaces a whole
@@ -153,6 +159,11 @@ function toSummary(record: RunRecord): RunSummary {
   if (record.lastEventKind !== undefined) summary.lastEventKind = record.lastEventKind
   if (record.costUsd !== undefined) summary.costUsd = record.costUsd
   if (record.turns !== undefined) summary.turns = record.turns
+  if (record.inputTokens !== undefined) summary.inputTokens = record.inputTokens
+  if (record.outputTokens !== undefined) summary.outputTokens = record.outputTokens
+  if (record.cachedTokens !== undefined) summary.cachedTokens = record.cachedTokens
+  if (record.reasoningTokens !== undefined) summary.reasoningTokens = record.reasoningTokens
+  if (record.model !== undefined) summary.model = record.model
   return summary
 }
 
@@ -169,6 +180,16 @@ function toStored(event: HarnessEvent, seq: number, at: number): StoredEvent {
   const stored: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(event)) {
     if (value !== undefined) stored[key] = value
+  }
+  if (event.kind === 'tool_finish' && typeof event.output === 'string') {
+    // One cap, stated once: the browser annotates the card with the same
+    // constant, so a store-side knob here would let the two drift apart.
+    const truncated = truncateHeadTail(event.output, DEFAULT_MAX_TOOL_OUTPUT_BYTES)
+    stored['output'] = truncated.text
+    if (truncated.truncated) {
+      stored['outputTruncated'] = true
+      stored['outputOriginalBytes'] = truncated.originalBytes
+    }
   }
   stored['seq'] = seq
   stored['at'] = at
@@ -234,8 +255,15 @@ export class RunStore {
         record.sessionId = result.sessionId
         record.finishedAt = finishedAt
         record.elapsedMs = finishedAt - record.startedAt
-        if (result.extras.costUsd !== undefined) record.costUsd = result.extras.costUsd
-        if (result.extras.numTurns !== undefined) record.turns = result.extras.numTurns
+        applyUsage(record, {
+          costUsd: result.extras.costUsd,
+          turns: result.extras.numTurns,
+          inputTokens: result.extras.inputTokens,
+          outputTokens: result.extras.outputTokens,
+          cachedTokens: result.extras.cachedTokens,
+          reasoningTokens: result.extras.reasoningTokens,
+          model: result.extras.model,
+        })
         // A finishing run is the moment a previously unevictable run becomes
         // evictable, so the bound converges even if no further run opens.
         this.evict()
@@ -320,8 +348,7 @@ export class RunStore {
           record.text += event.text
           break
         case 'usage':
-          if (event.costUsd !== undefined) record.costUsd = event.costUsd
-          if (event.turns !== undefined) record.turns = event.turns
+          applyUsage(record, event)
           break
         default:
           break
@@ -400,6 +427,25 @@ function mergeDelta(record: RunRecord, event: HarnessEvent): boolean {
   if (tail.kind !== event.kind) return false
   tail.text += event.text
   return true
+}
+
+/** Copy defined usage fields onto the record; later reports overwrite earlier ones. */
+function applyUsage(record: RunRecord, usage: {
+  costUsd?: number
+  turns?: number
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  reasoningTokens?: number
+  model?: string
+}): void {
+  if (usage.costUsd !== undefined) record.costUsd = usage.costUsd
+  if (usage.turns !== undefined) record.turns = usage.turns
+  if (usage.inputTokens !== undefined) record.inputTokens = usage.inputTokens
+  if (usage.outputTokens !== undefined) record.outputTokens = usage.outputTokens
+  if (usage.cachedTokens !== undefined) record.cachedTokens = usage.cachedTokens
+  if (usage.reasoningTokens !== undefined) record.reasoningTokens = usage.reasoningTokens
+  if (usage.model !== undefined) record.model = usage.model
 }
 
 /** Head of the prompt, marked when cut so a card never implies it showed all of it. */

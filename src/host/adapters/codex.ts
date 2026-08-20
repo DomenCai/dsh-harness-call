@@ -12,7 +12,7 @@
 import { HARNESS_LABELS } from '../../shared/harness.js'
 import type { HarnessEvent } from '../../shared/events.js'
 import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.js'
-import { exitFailure, isRecord, readNumber, readRecord, readString } from './native.js'
+import { exitFailure, isRecord, missingCallId, readNumber, readRecord, readString } from './native.js'
 
 /** Longest failure message folded into {@link RunResult.errors}. */
 const MAX_ERROR_CHARACTERS = 160
@@ -30,6 +30,20 @@ export interface CodexState extends RunState {
   completed?: boolean
   /** The `turn.failed` event, once seen. */
   failed?: Record<string, unknown>
+  /** Token/model accounting from `turn.completed` / `token_count`. */
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    cachedTokens?: number
+    reasoningTokens?: number
+    model?: string
+  }
+  /**
+   * Item ids already announced via `item.started`. A single-frame tool
+   * (web_search, …) only appears as `item.completed`; those synthesize a
+   * start+finish pair in the same tick so the client still gets a card.
+   */
+  started: Set<string>
 }
 
 /**
@@ -51,7 +65,7 @@ export const codexAdapter: HarnessAdapter<CodexState> = {
   bin: 'codex',
 
   createState(): CodexState {
-    return { text: '' }
+    return { text: '', started: new Set() }
   },
 
   build(req: RunRequest): SpawnSpec {
@@ -89,6 +103,15 @@ export const codexAdapter: HarnessAdapter<CodexState> = {
       return [{ kind: 'session', sessionId }]
     }
 
+    if (type === 'item.started') {
+      const item = readRecord(native, 'item')
+      if (item === undefined) return []
+      const started = toolStartFromItem(item)
+      if (started === undefined) return []
+      if (started.kind === 'tool_start') state.started.add(started.callId)
+      return [started]
+    }
+
     if (type === 'item.completed') {
       const item = readRecord(native, 'item')
       if (item === undefined) return []
@@ -119,10 +142,8 @@ export const codexAdapter: HarnessAdapter<CodexState> = {
       } else if (itemType === 'reasoning') {
         const text = readString(item, 'text')
         if (text !== undefined && text.trim() !== '') return [{ kind: 'reasoning', text }]
-      } else if (itemType === 'command_execution') {
-        return [
-          { kind: 'tool', name: 'command_execution', input: item['command'], exitCode: readNumber(item, 'exit_code') },
-        ]
+      } else if (itemType === 'command_execution' || itemType === 'web_search' || isToolItem(itemType)) {
+        return toolFinishFromItem(state, item, typeof itemType === 'string' ? itemType : 'tool')
       } else if (itemType === 'file_change') {
         const changes = fileChanges(item)
         /*
@@ -136,8 +157,6 @@ export const codexAdapter: HarnessAdapter<CodexState> = {
         return changes.length > 0
           ? changes
           : [{ kind: 'note', text: `file_change ${JSON.stringify(item)}` }]
-      } else if (itemType === 'web_search') {
-        return [{ kind: 'tool', name: 'web_search', input: item['query'] }]
       } else if (itemType === 'error') {
         const message = readString(item, 'message')
         /*
@@ -168,7 +187,17 @@ export const codexAdapter: HarnessAdapter<CodexState> = {
 
     if (type === 'turn.completed') {
       state.completed = true
-      return []
+      const usage = readRecord(native, 'usage')
+      const tokens = readCodexUsage(usage, native)
+      if (hasDefined(tokens)) state.usage = { ...state.usage, ...tokens }
+      return hasDefined(tokens) ? [{ kind: 'usage', ...tokens }] : []
+    }
+
+    if (type === 'token_count' || type === 'event.token_count') {
+      const tokens = readCodexUsage(readRecord(native, 'usage') ?? native, native)
+      if (!hasDefined(tokens)) return []
+      state.usage = { ...state.usage, ...tokens }
+      return [{ kind: 'usage', ...tokens }]
     }
 
     if (type === 'turn.failed') {
@@ -203,9 +232,101 @@ export const codexAdapter: HarnessAdapter<CodexState> = {
       // tokens (`input_tokens` / `cached_input_tokens` / `output_tokens` /
       // `reasoning_output_tokens`) and names neither a cost nor a turn count,
       // and `extras` has no token field to carry them honestly.
-      extras: {},
+      extras: {
+        inputTokens: state.usage?.inputTokens,
+        outputTokens: state.usage?.outputTokens,
+        cachedTokens: state.usage?.cachedTokens,
+        reasoningTokens: state.usage?.reasoningTokens,
+        model: state.usage?.model,
+      },
     }
   },
+}
+
+function isToolItem(itemType: unknown): boolean {
+  return itemType === 'mcp_tool_call' || itemType === 'tool' || itemType === 'function_call'
+}
+
+function toolStartFromItem(item: Record<string, unknown>): HarnessEvent | undefined {
+  const itemType = item['type']
+  if (itemType === 'command_execution') {
+    const callId = readString(item, 'id')
+    const command = item['command']
+    if (callId === undefined) return missingCallId('tool command_execution started')
+    return command === undefined
+      ? { kind: 'tool_start', callId, name: 'command_execution' }
+      : { kind: 'tool_start', callId, name: 'command_execution', input: command }
+  }
+  if (itemType === 'web_search') {
+    const callId = readString(item, 'id')
+    const query = item['query']
+    if (callId === undefined) return missingCallId('tool web_search started')
+    return query === undefined
+      ? { kind: 'tool_start', callId, name: 'web_search' }
+      : { kind: 'tool_start', callId, name: 'web_search', input: query }
+  }
+  if (!isToolItem(itemType)) return undefined
+  const name = readString(item, 'name') ?? (typeof itemType === 'string' ? itemType : 'tool')
+  const callId = readString(item, 'id') ?? readString(item, 'call_id')
+  if (callId === undefined) return missingCallId(`tool ${name} started`)
+  const input = item['input'] ?? item['arguments']
+  return input === undefined
+    ? { kind: 'tool_start', callId, name }
+    : { kind: 'tool_start', callId, name, input }
+}
+
+function toolFinishFromItem(state: CodexState, item: Record<string, unknown>, fallbackName: string): HarnessEvent[] {
+  const name = fallbackName === 'command_execution'
+    ? 'command_execution'
+    : fallbackName === 'web_search'
+      ? 'web_search'
+      : (readString(item, 'name') ?? fallbackName)
+  const callId = readString(item, 'id') ?? readString(item, 'call_id')
+  if (callId === undefined) return [missingCallId(`tool ${name} completed`)]
+  const output = fallbackName === 'command_execution'
+    ? readString(item, 'aggregated_output')
+    : (readString(item, 'output') ?? readString(item, 'aggregated_output'))
+  const exitCode = readNumber(item, 'exit_code')
+    ?? (readString(item, 'status') === 'failed' ? 1 : 0)
+  const finish: HarnessEvent = {
+    kind: 'tool_finish',
+    callId,
+    name,
+    ...(output !== undefined ? { output } : {}),
+    exitCode,
+  }
+  if (state.started.has(callId)) return [finish]
+  const input = fallbackName === 'command_execution'
+    ? item['command']
+    : fallbackName === 'web_search'
+      ? item['query']
+      : (item['input'] ?? item['arguments'] ?? item['query'])
+  const start: HarnessEvent = input === undefined
+    ? { kind: 'tool_start', callId, name }
+    : { kind: 'tool_start', callId, name, input }
+  state.started.add(callId)
+  return [start, finish]
+}
+
+function readCodexUsage(source: Record<string, unknown> | undefined, native: Record<string, unknown>): {
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  reasoningTokens?: number
+  model?: string
+} {
+  const from = source ?? native
+  return {
+    inputTokens: readNumber(from, 'input_tokens'),
+    outputTokens: readNumber(from, 'output_tokens'),
+    cachedTokens: readNumber(from, 'cached_input_tokens') ?? readNumber(from, 'cached_tokens'),
+    reasoningTokens: readNumber(from, 'reasoning_output_tokens') ?? readNumber(from, 'reasoning_tokens'),
+    model: readString(from, 'model') ?? readString(native, 'model'),
+  }
+}
+
+function hasDefined(value: Record<string, unknown>): boolean {
+  return Object.values(value).some(entry => entry !== undefined)
 }
 
 /**

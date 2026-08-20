@@ -25,7 +25,7 @@
 import { HARNESS_LABELS } from '../../shared/harness.js'
 import type { HarnessEvent } from '../../shared/events.js'
 import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.js'
-import { exitFailure, isRecord, readRecord, readString } from './native.js'
+import { exitFailure, isRecord, missingCallId, readRecord, readString } from './native.js'
 
 /**
  * Kimi ships a whole assistant message per frame (never deltas), splits tool
@@ -110,9 +110,15 @@ export const kimiAdapter: HarnessAdapter<KimiState> = {
             continue
           }
           const callId = readString(call, 'id')
-          if (callId !== undefined) state.tools.set(callId, name)
+          if (callId === undefined) {
+            events.push(missingCallId(`tool ${name} started`))
+            continue
+          }
+          state.tools.set(callId, name)
           const input = toolInput(readString(fn, 'arguments'))
-          events.push(input === undefined ? { kind: 'tool', name } : { kind: 'tool', name, input })
+          events.push(input === undefined
+            ? { kind: 'tool_start', callId, name }
+            : { kind: 'tool_start', callId, name, input })
         }
       }
       return events
@@ -126,7 +132,15 @@ export const kimiAdapter: HarnessAdapter<KimiState> = {
        */
       const callId = readString(native, 'tool_call_id')
       const name = (callId !== undefined ? state.tools.get(callId) : undefined) ?? 'tool'
-      return [{ kind: 'tool', name, exitCode: 0 }]
+      if (callId === undefined) return [missingCallId(`tool ${name} completed`)]
+      const output = readString(native, 'content')
+      return [{
+        kind: 'tool_finish',
+        callId,
+        name,
+        ...(output !== undefined ? { output } : {}),
+        exitCode: 0,
+      }]
     }
 
     if (role === 'meta') {

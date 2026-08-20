@@ -16,7 +16,7 @@
 import { HARNESS_LABELS } from '../../shared/harness.js'
 import type { HarnessEvent } from '../../shared/events.js'
 import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.js'
-import { exitFailure, isRecord, readNumber, readString } from './native.js'
+import { exitFailure, isRecord, missingCallId, readNumber, readRecord, readString, toolOutputText } from './native.js'
 
 /**
  * Grok streams the reply as `text` deltas and reasoning as per-token `thought`
@@ -122,33 +122,48 @@ export const grokAdapter: HarnessAdapter<GrokState> = {
       const name = readString(native, 'toolName') ?? readString(native, 'title')
       if (name === undefined) return [{ kind: 'note', text: 'tool_call' }]
       const callId = readString(native, 'toolCallId')
-      if (callId !== undefined) state.tools.set(callId, name)
+      if (callId === undefined) return [missingCallId(`tool ${name} started`)]
+      state.tools.set(callId, name)
       const input = native['rawInput']
-      return [input === undefined ? { kind: 'tool', name } : { kind: 'tool', name, input }]
+      return [input === undefined
+        ? { kind: 'tool_start', callId, name }
+        : { kind: 'tool_start', callId, name, input }]
     } else if (type === 'tool_call_update') {
       /*
-       * The settlement half of a tool call. Updates with `status: null` carry
-       * only locations/progress and are dropped; a terminal status becomes the
-       * tool event's exit code, attributed through the id→name table.
+       * The settlement half of a tool call. Updates with `status: null` /
+       * `in_progress` carry only locations/progress and are dropped; a
+       * terminal status becomes the tool event's exit code, attributed
+       * through the id→name table. Output lives on `content` (a text
+       * wrapper) or `rawOutput` depending on the tool.
        */
       const status = readString(native, 'status')
       if (status !== 'completed' && status !== 'failed') return []
       const callId = readString(native, 'toolCallId')
       const name = (callId !== undefined ? state.tools.get(callId) : undefined) ?? 'tool'
-      return [{ kind: 'tool', name, exitCode: status === 'completed' ? 0 : 1 }]
+      if (callId === undefined) return [missingCallId(`tool ${name} completed`)]
+      const output = grokToolOutput(native)
+      return [{
+        kind: 'tool_finish',
+        callId,
+        name,
+        ...(output !== undefined ? { output } : {}),
+        exitCode: status === 'completed' ? 0 : 1,
+      }]
     } else if (type === 'usage') {
       /*
-       * Mid-run token accounting (`usage` object plus a ~170-character
-       * `signature`). It names neither a cost nor a turn count — the `end`
-       * frame carries both — so there is nothing honest to show, and the
-       * signature must never reach a timeline row.
+       * Mid-run token accounting. The nested `usage` object is honest
+       * about tokens; the accompanying `signature` must never reach a
+       * timeline row. Cost/turns still come from the `end` frame.
        */
-      return []
+      const tokens = grokUsage(readRecord(native, 'usage') ?? native)
+      return hasDefined(tokens) ? [{ kind: 'usage', ...tokens }] : []
     } else if (type === 'end') {
       // The closing frame is a verdict, not something to show: `finalize`
-      // reads its session id and stop reason.
+      // reads its session id and stop reason. Tokens/cost/model do become a
+      // usage event so the footer can update before the run is marked done.
       state.end = native
-      return []
+      const usage = grokEndUsage(native)
+      return hasDefined(usage) ? [{ kind: 'usage', ...usage }] : []
     } else if (type === 'error') {
       state.error = native
       const message = readString(native, 'message')
@@ -193,7 +208,101 @@ export const grokAdapter: HarnessAdapter<GrokState> = {
       // The closing frame accounts for the run: `"num_turns":1,
       // "total_cost_usd":0.00649026`. Reading it is what makes the card's cost
       // and turn lines say anything at all for this harness.
-      extras: { costUsd: readNumber(state.end, 'total_cost_usd'), numTurns: readNumber(state.end, 'num_turns') },
+      extras: extrasFrom(grokEndUsage(state.end)),
     }
   },
+}
+
+function grokToolOutput(native: Record<string, unknown>): string | undefined {
+  const raw = native['rawOutput']
+  if (typeof raw === 'string') return raw
+  if (isRecord(raw)) {
+    const file = readRecord(raw, 'FileContent')
+    const fileText = readString(file, 'content')
+    if (fileText !== undefined) return fileText
+    const nested = toolOutputText(raw)
+    if (nested !== undefined) return nested
+  }
+  const content = native['content']
+  if (Array.isArray(content)) {
+    const parts: string[] = []
+    for (const part of content) {
+      if (!isRecord(part)) continue
+      const inner = readRecord(part, 'content')
+      const text = readString(inner, 'text') ?? readString(part, 'text')
+      if (text !== undefined) parts.push(text)
+    }
+    if (parts.length > 0) return parts.join('')
+  }
+  return undefined
+}
+
+function grokModel(native: Record<string, unknown> | undefined): string | undefined {
+  if (native === undefined) return undefined
+  const usage = readRecord(native, 'modelUsage')
+  if (usage !== undefined) {
+    const first = Object.keys(usage)[0]
+    if (first !== undefined) return first
+  }
+  return readString(native, 'model')
+}
+
+function grokUsage(source: Record<string, unknown> | undefined): {
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  reasoningTokens?: number
+  model?: string
+} {
+  if (source === undefined) return {}
+  return {
+    inputTokens: readNumber(source, 'input_tokens'),
+    outputTokens: readNumber(source, 'output_tokens'),
+    cachedTokens: readNumber(source, 'cache_read_input_tokens'),
+    reasoningTokens: readNumber(source, 'reasoning_tokens'),
+    model: grokModel(source),
+  }
+}
+
+function grokEndUsage(native: Record<string, unknown> | undefined): {
+  costUsd?: number
+  turns?: number
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  reasoningTokens?: number
+  model?: string
+} {
+  if (native === undefined) return {}
+  const nested = grokUsage(readRecord(native, 'usage') ?? native)
+  return {
+    costUsd: readNumber(native, 'total_cost_usd'),
+    turns: readNumber(native, 'num_turns'),
+    ...nested,
+    model: grokModel(native) ?? nested.model,
+  }
+}
+
+function extrasFrom(usage: {
+  costUsd?: number
+  turns?: number
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  reasoningTokens?: number
+  model?: string
+}): RunResult['extras'] {
+  return {
+    costUsd: usage.costUsd,
+    numTurns: usage.turns,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cachedTokens: usage.cachedTokens,
+    reasoningTokens: usage.reasoningTokens,
+    model: usage.model,
+  }
+}
+
+function hasDefined(value: Record<string, unknown>): boolean {
+  return Object.values(value).some(entry => entry !== undefined)
 }

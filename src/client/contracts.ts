@@ -21,6 +21,7 @@
  * @module dsh-harness-call/client/contracts
  */
 
+import type { ReactNode } from 'react'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 // Declaration merges only: the 'shell.overlay' seat.
@@ -33,6 +34,74 @@ import type { LOCALE_NS, LocaleKey } from './locales.js'
 
 /** This half's translate function, typed to ./locales.ts. */
 export type HarnessTranslate = TranslateNS<typeof LOCALE_NS>
+
+/**
+ * The Better Sidebar surface this plugin consumes, restated locally.
+ *
+ * `dsh-better-sidebar` is an optional peer; its built `lib/types` may be
+ * absent in a linked checkout, and a value import is forbidden by the
+ * client-bundle purity gate. Only the members this plugin calls are named.
+ */
+export interface SidebarTab {
+  id: string
+  type: string
+  title: string
+  meta?: unknown
+}
+
+export interface SidebarState {
+  panelOpen: boolean
+  bottomOpen: boolean
+  activePane: string | null
+  splits: unknown
+  bottomSplits: unknown
+}
+
+export interface SidebarSnapshot {
+  sessionId?: string
+  state?: SidebarState
+}
+
+export interface OpenTabSeed {
+  type: string
+  title?: string
+  id?: string
+  meta?: unknown
+}
+
+export interface SessionScope {
+  sessionId: string
+  cwd?: string
+}
+
+export interface TabComponentProps {
+  tab: SidebarTab
+  visible: boolean
+  scope: SessionScope
+}
+
+export interface TabDescriptor {
+  id: string
+  title: string | (() => string)
+  order?: number
+  hidden?: boolean
+  dedupeKey?: (tab: SidebarTab) => string | undefined
+  component: (props: TabComponentProps) => ReactNode
+}
+
+export interface BetterSidebarService {
+  registerTab(descriptor: TabDescriptor): () => void
+  getTab(id: string): TabDescriptor | undefined
+  openTab(seed: OpenTabSeed, scope?: SessionScope): void
+  getSnapshot(): SidebarSnapshot
+  readonly features: readonly string[]
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    betterSidebar: BetterSidebarService
+  }
+}
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {

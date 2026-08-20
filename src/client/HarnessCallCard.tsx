@@ -15,15 +15,15 @@
  * @module dsh-harness-call/client/HarnessCallCard
  */
 
-import type { MouseEvent, ReactNode } from 'react'
+import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SessionId, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientContext, SessionId, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import type { RunSummary } from '../shared/events.js'
 import { HARNESS_LABELS, isHarnessKey } from '../shared/harness.js'
 import type { HarnessTranslate } from './contracts.js'
-import type { PanelTarget } from './HarnessPanel.js'
 import css from './HarnessCall.module.css'
-import { brief, matchRun, readArgs, readResult, seconds, useChannel, useRoster, type RunFeed } from './runs.js'
+import { brief, matchRun, readArgs, readResult, seconds, useChannel, useRoster, type PanelTarget, type RunFeed } from './runs.js'
+import { tryOpenSidebarTab } from './sidebar.js'
 
 /** Cap of the prompt excerpt shown on a running card. */
 const PROMPT_EXCERPT_CHARACTERS = 140
@@ -60,6 +60,7 @@ function swallow(event: MouseEvent<HTMLDivElement>): void {
  * @returns the card tree.
  */
 export function HarnessCallCard(props: {
+  ctx: ClientContext
   callId: string
   sessionId: SessionId
   block: ToolCallBlock
@@ -67,7 +68,7 @@ export function HarnessCallCard(props: {
   t: HarnessTranslate
   onOpen: (target: PanelTarget) => void
 }): ReactNode {
-  const { callId, sessionId, block, feed, t, onOpen } = props
+  const { ctx, callId, sessionId, block, feed, t, onOpen } = props
   // Only the settled half of the union carries a `kind`; the running call has
   // no discriminant field of its own.
   const settled = 'kind' in block
@@ -81,15 +82,34 @@ export function HarnessCallCard(props: {
   const label = result?.label ?? summary?.label ?? harnessLabel(args.harness)
   const channelError = settled ? undefined : channel.error
 
+  // A running card has no result to read a runId off, but by the time it is
+  // clicked the roster usually knows one — and carrying it is what lets a
+  // persisted sidebar tab tell "not started yet" from "host restarted".
+  const target = (): PanelTarget => ({
+    callId,
+    sessionId,
+    harness: args.harness ?? summary?.harness,
+    label,
+    prompt: args.prompt,
+    runId: result?.runId ?? summary?.runId,
+    openedAt: Date.now(),
+    result,
+  })
+
   const open = (): void => {
-    onOpen({
-      callId,
-      sessionId,
-      harness: args.harness ?? summary?.harness,
-      label,
-      prompt: args.prompt,
-      result,
-    })
+    const next = target()
+    if (!tryOpenSidebarTab(ctx, next, t)) onOpen(next)
+  }
+
+  const onKey = (event: KeyboardEvent<HTMLDivElement>): void => {
+    // Only when the CARD itself holds focus. The full-reply `<summary>` is the
+    // other focusable node in this tree, and its Enter/Space belongs to the
+    // disclosure — `swallow` stops the mouse path, this stops the keyboard one.
+    if (event.target !== event.currentTarget) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      open()
+    }
   }
 
   if (settled) {
@@ -100,7 +120,7 @@ export function HarnessCallCard(props: {
     if (result?.elapsedMs !== undefined) head.push(`${seconds(result.elapsedMs)}s`)
     if (result?.steps !== undefined) head.push(t('card.events', { n: result.steps }))
     return (
-      <div className={css.card} title={t('card.openDone')} onClick={open}>
+      <div className={css.card} role="button" tabIndex={0} title={t('card.openDone')} onClick={open} onKeyDown={onKey}>
         <div className={css.head}>
           <StateDot state={ok ? 'done' : 'error'} className={css.dot} />
           <span className={css.label}>{label}</span>
@@ -130,7 +150,7 @@ export function HarnessCallCard(props: {
   // `null` is the host saying the harness never reported a session id.
   const liveSession = summary?.sessionId
   return (
-    <div className={css.card} title={t('card.openRunning')} onClick={open}>
+    <div className={css.card} role="button" tabIndex={0} title={t('card.openRunning')} onClick={open} onKeyDown={onKey}>
       <div className={css.head}>
         <StateDot state="ongoing" className={css.dot} />
         <span className={css.label}>{`${label} · ${t('card.running')}`}</span>

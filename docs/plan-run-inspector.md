@@ -7,7 +7,7 @@
 | 问题 | 决策 |
 |---|---|
 | Q1 面板位置 | **Better Sidebar 优先 + 浮动面板降级**。点击卡片时实时读取服务并用 `getSnapshot()` 判断侧栏可见性：可见 → `openTab` 进 sidebar；不可见（折叠/窄屏抽屉未开）→ fallback 现有浮动面板。第一版不做用户设置、不向 Better Sidebar 提 reveal API（留作后续升级项）。 |
-| Q2 工具输出范围 | **每工具 output 上限 16KB（head 12KB + tail 4KB）**，截断发生在 **RunStore 的 `toStored` chokepoint**（`RunStoreOptions.maxToolOutputBytes`，默认 16384），事件携带 `outputTruncated` / `outputOriginalBytes` 标记。raw log 永远保留完整原文（截断放 store 层而非 adapter 层的决定性理由：semantic 事件在进入 store **之前**就写入 raw log，adapter 层截断会破坏其 lossless 定位）。客户端渲染层另叠 `headTailCap` 行数折叠（默认折叠可展开），与内存字节上限是两回事。 |
+| Q2 工具输出范围 | **每工具 output 上限 16KB（head 12KB + tail 4KB）**，截断发生在 **RunStore 的 `toStored` chokepoint**（单一常量 `DEFAULT_MAX_TOOL_OUTPUT_BYTES = 16384`，不设 store 级 override，理由见第八节），事件携带 `outputTruncated` / `outputOriginalBytes` 标记。raw log 永远保留完整原文（截断放 store 层而非 adapter 层的决定性理由：semantic 事件在进入 store **之前**就写入 raw log，adapter 层截断会破坏其 lossless 定位）。客户端渲染层另叠 `headTailCap` 行数折叠（默认折叠可展开），与内存字节上限是两回事。 |
 | Q3 Activity 数据模型 | **独立 kind：`tool_start` / `tool_finish`**（不用 phase 字段——start/finish 字段集不相交，两个成员表达最精确）。四个 adapter 一律只发 start/finish 对；harness 只报单一时刻的（如 codex `web_search` 只在 `item.completed` 出现）由 adapter 在同一帧合成两条（duration=0）。旧 `tool` kind 保留在 union 中仅为 wire 兼容，新代码不再产生。Client 按 `callId` 投影聚合为工具卡片，append-only 事件流 + `deliveredSeq` 不变量不动。 |
 
 讨论中被否决的备选：①「始终 openTab 不做可见性判断」——侧栏折叠时点击卡片视觉上毫无反馈，体验破碎；②「phase 字段单 kind」——input/output 互斥但同处一个成员，类型无法精确表达；③「adapter 层截断」——破坏 raw log lossless + 第 5 个 harness 接入时可能忘记；④「react-markdown 依赖」——DSH 已有现成组件（见下）。
@@ -65,7 +65,7 @@ export type HarnessEvent =
 | 文件 | 改动 |
 |---|---|
 | `src/shared/events.ts` | 上面的 union 扩展 + RunSummary 加 usage 字段 |
-| `src/host/runs.ts` | `RunStoreOptions.maxToolOutputBytes`（默认 16384）；`toStored` chokepoint 对 `tool_finish.output` 做 head(12K)+tail(4K) 安全 UTF-8 切分截断；usage 字段镜像进 record/summary |
+| `src/host/runs.ts` | `toStored` chokepoint 对 `tool_finish.output` 按 `DEFAULT_MAX_TOOL_OUTPUT_BYTES` 做 head(12K)+tail(4K) 安全 UTF-8 切分截断；usage 字段镜像进 record/summary |
 | `src/host/tool.ts` | **`describeEvent` 穷举 switch 必须加新 kind**（否则 typecheck 直接失败）：digest 中重新合并为一行——`tool_start → "25s tool Read {…}"`、`tool_finish → "25s tool Read exit=0 output=5.4K"`（模型不需要知道两阶段内部结构）；扩展 usage digest |
 | `src/host/adapters/grok.ts` | `tool_call→tool_start`；`tool_call_update→tool_finish`（exitCode 从 status 推导）；State.tools 改 `Map<callId, name>` |
 | `src/host/adapters/claude.ts` | `tool_use→tool_start`（映射 `id`）；**新增 `user` frame 处理：`tool_result` block → `tool_finish`**（当前完全未处理，输出全丢）；result 的 model/usage tokens 进 usage 事件 |
@@ -79,12 +79,12 @@ export type HarnessEvent =
 
 | 文件 | 改动 |
 |---|---|
-| `src/client/activities.ts`（新增） | `projectActivities(events) → { tools: ToolActivity[], orphans }`：按 callId 聚合，卡片按 startSeq 排序（finish 不移位、running 占位），孤儿 finish（start 被 ring buffer 驱逐）单独收集 |
-| `src/client/ToolActivityCard.tsx`（新增） | 状态（running/done/failed）+ 耗时（finish.at − start.at 推导，不单独存储）+ input/output 折叠（TerminalBlock / CodeBlock + headTailCap）+ 截断标注「显示 16KB / 1.2MB」 |
+| `src/client/activities.ts`（新增） | `projectActivities(events) → { tools: ToolActivity[], orphans }`：按 callId 聚合，卡片按 startSeq 排序（finish 不移位、running 占位），孤儿 finish（start 被 ring buffer 驱逐）单独收集。孤儿**不带 `startSeq` / `startAt`**——没有开始就没有开始，两个字段因此是可选的 |
+| `src/client/ToolActivityCard.tsx`（新增） | 状态（running/done/failed）+ 耗时（finish.at − start.at 推导，不单独存储；孤儿两端不全则不显示耗时）+ input/output 折叠（TerminalBlock / CodeBlock + headTailCap）+ 截断标注「显示 16KB / 1.2MB」 |
 | `src/client/HarnessRunView.tsx`（新增） | 从 HarnessPanel 拆出纯内容组件：run 数据 + 轮询 + `visible` 暂停轮询；不知道 overlay/sidebar 外壳 |
 | `src/client/HarnessPanel.tsx` | 改为外壳（aside/Escape/focus）+ 包裹 HarnessRunView；final reply 用 MarkdownText；**stderrTail 展示**（wire 上已有该字段，仅 `readResult` 未解析）；finished run 也显示 prompt（去掉 `!done &&`）；Header/Meta 分行重排；关闭时恢复焦点；footer 加 tokens/model |
 | `src/client/runs.ts` | RunView 加 `activities` 投影；`useRunDetail` 加 `active` 参数 + in-flight 防重入；`readResult` 补 `stderrTail` |
-| `src/client/HarnessCallCard.tsx` | tool 行替换为 ToolActivityCard；卡片键盘可访问（role="button"） |
+| `src/client/HarnessCallCard.tsx` | tool 行替换为 ToolActivityCard；卡片键盘可访问（role="button"）——卡片的 Enter/Space 只在**卡片自身**持焦时响应，完整回复 `<summary>` 的按键归 disclosure |
 | `src/client/locales.ts` | 新 key：activity.input/output/orphans/truncated 等 |
 
 ### 阶段三：Better Sidebar 集成（软依赖）
@@ -92,16 +92,21 @@ export type HarnessEvent =
 | 文件 | 改动 |
 |---|---|
 | `src/client/index.tsx` | type-only import（`import type {} from 'dsh-better-sidebar/client/service'`）；`ctx.inject(['betterSidebar'], ...)` 局部子 fiber 注册 tab（**不加进顶层 inject**，未安装时 client half 必须照常激活）：id=`dsh-harness-call:run`、hidden=true（不进 + 菜单）、`dedupeKey` 按 meta.runId（同 run 聚焦已有 tab）、component 用 `props.visible` 渲染 HarnessRunView |
-| `src/client/HarnessCallCard.tsx` | 点击路由：`ctx.get('betterSidebar')` 实时读取（不看静态注册标记）→ features 含 targetedOpen+tabMeta → `getSnapshot()` 判可见性（窄屏看 `state.panelOpen`；宽屏看 activePane 所在树：bottom → `bottomOpen`，否则 `panelOpen`）→ 可见 `openTab({type,id:harness-run-<callId>,title,meta})`，不可见/服务缺失 → overlay fallback。meta 只放纯 JSON（callId/runId/harness/label/prompt/result），feed/t 通过注册闭包获得 |
+| `src/client/HarnessCallCard.tsx` | 点击路由：`ctx.get('betterSidebar')` 实时读取（不看静态注册标记）→ features 含 targetedOpen+tabMeta → `getSnapshot()` 判可见性（窄屏看 `state.panelOpen`；宽屏看 activePane 所在树：bottom → `bottomOpen`，否则 `panelOpen`）→ 可见 `openTab({type,id:harness-run-<callId>,title,meta})`，不可见/服务缺失 → overlay fallback。meta 只放纯 JSON（callId/runId/openedAt/harness/label/prompt/result），feed/t 通过注册闭包获得。**运行中的卡片也带 runId**（settled 取 `result.runId`，运行中取 roster summary 的），`openedAt` 是点击时刻——两者都是给重启后的恢复用的，见下 |
 | `package.json` | peerDependencies `dsh-better-sidebar: ^0.12.3` + optional Meta；devDeps `link:../DSH-better-sidebar` |
 
-tab 生命周期注意：meta 会持久化，DSH 重启后 tab 恢复但 run store 是内存的 → component 检测 run 拿不到（settled + view undefined + 终态）时显示「Run 已过期（host 重启）」。
+tab 生命周期注意：meta 会持久化，DSH 重启后 tab 恢复但 run store 是内存的 → component 检测 run 拿不到时显示「Run 已过期（host 重启）」。判定分两路，因为 tab 可能在 run 运行中就被打开：
+
+- **meta 带 runId**（settled，或运行中打开时 roster 已认领）：`get(runId)` 答 `'unknown'` 即终态。这里的前提是「runId 是已知的而非猜的」——从 roster 猜来的 id 不适用，它按定义就在 store 里。
+- **meta 无 runId**（运行中打开、roster 尚未返回的窄窗口）：从 `openedAt` 起 30s 内仍未在 roster 找到，即判过期并停止轮询。恢复的 tab `openedAt` 早已过期，首帧即判定。
+
+`openedAt` 同时是 `matchRun` harness 猜测分支的时间上界（+60s 时钟容差）：晚于点击才启动的 run 不可能是这个 tab 的，否则重启后的旧 tab 会认领当前正在跑的别人的 run。exact `callId` 匹配不受此约束——那是身份不是推断。
 
 ## 五、风险与既定应对
 
-1. **孤儿 finish**（start 被 ring buffer 驱逐）：orphans 显式收集 + UI 提示「N 个工具的起始记录已被截断」，仍显示 name/exitCode/output，只是无时长。
+1. **孤儿 finish**（start 被 ring buffer 驱逐）：orphans 显式收集 + UI 提示「N 个工具的起始记录已被截断」，仍显示 name/exitCode/output，只是无时长。时间线上**渲染在自身 finish 的 seq 位置**，不追加到末尾——孤儿几乎必然属于保留窗口里最早的一批事件，追加末尾等于系统性倒置顺序。
 2. **并行工具乱序完成**：卡片按 startSeq 排序，finish 只更新状态不移位。
-3. **DSH 重启后 tab 恢复指向不存在的 run**：过期提示（见上）。
+3. **DSH 重启后 tab 恢复指向不存在的 run**：过期提示 + 猜测分支的时间上界防串号（见上）。
 4. **非 UTF-8 / 多字节字符被切断**：store 截断按字符边界安全切分。
 5. **多 sidebar tab 轮询**：`visible=false` 暂停；roster 本就全局共享单 timer。
 6. **Markdown 安全**：MarkdownText 本就为不可信输出设计。
@@ -121,3 +126,15 @@ tab 生命周期注意：meta 会持久化，DSH 重启后 tab 恢复但 run sto
 - 截断位置 adapter 层 → store 层（raw log lossless 论证）。
 - 输出上限 8KB → 16KB（12K 真实样本完整保留）。
 - reveal：始终 openTab → snapshot 可见性判断 + overlay fallback。
+
+## 八、实施期修订（三阶段落地后的 review）
+
+正文已按下列结论更新，此节只记录**偏离原方案的决策**及其理由。
+
+1. **删掉 `RunStoreOptions.maxToolOutputBytes`，只留常量。** 原方案要它可配，但唯一的构造点（`src/index.ts`）从不传值，Config schema 里也没有对应项——它是个没有入口的旋钮。而客户端的截断标注读的是同一个常量，一旦 store 侧真被改成别的值，UI 就会稳定地说错保留量。与其为一个不存在的配置补 wire 字段（`outputStoredBytes`）去消除不一致，不如让常量成为唯一事实源，不一致便无从发生。将来真要可配，再连同 Config 与事件字段一起加。
+2. **孤儿 finish 不再借 finish 的时间戳充当 `startAt`。** 原实现两端同值，`durationOf` 因此稳定输出 `0.0s`——把「开始时间未知」表达成了「确实 0 秒完成」，且与 codex 单帧工具**有意**合成的真实 `duration=0` 无法区分。`startSeq` / `startAt` 改为可选，孤儿不设。
+3. **孤儿在时间线上的位置从「末尾追加」改为「自身 seq 处渲染」。** 见第五节第 1 条。
+4. **`PanelTarget` 新增 `runId` / `openedAt` 两个字段。** 原方案的过期判定只覆盖 settled tab，运行中打开的 tab 重启后会永久停在「等待 harness 启动」并持续轮询，还可能被 `matchRun` 的 harness 猜测分支挂到别人的 run 上。见第四节阶段三。
+5. **`useRunDetail` 的 `settled` 参数改名 `authoritative`。** 决定 `'unknown'` 是否终态的从来不是「调用是否结束」，而是「这个 runId 是已知的还是猜的」——原名字在运行中 tab 也持有 runId 之后就不再成立。
+
+未覆盖的验证：以上改动只做了 typecheck / build 与纯函数断言（`projectActivities`、`matchRun`），时间线渲染顺序、键盘行为、过期提示与 tab 恢复均未端到端跑过，项目目前也没有测试脚本。

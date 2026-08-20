@@ -24,9 +24,10 @@ import { defaultHarnessCallSettings, type HarnessCallSettingsUpdate } from '../s
 import { HARNESS_CALL_CONTRIBUTION, SERVICE_KEY, type HarnessCallRemoteClient } from '../shared/wire.js'
 import type {} from './contracts.js'
 import { HarnessCallCard } from './HarnessCallCard.js'
-import { HarnessPanel, type PanelTarget } from './HarnessPanel.js'
+import { HarnessPanel } from './HarnessPanel.js'
 import { DICTIONARIES, LOCALE_NS } from './locales.js'
-import { createRunFeed } from './runs.js'
+import { createRunFeed, type PanelTarget } from './runs.js'
+import { registerRunTab } from './sidebar.js'
 import { HarnessSettingsSection, type HarnessSectionInjected } from './SettingsSection.js'
 
 /** The tool this half renders a card for; the keyed-slot cell. */
@@ -150,6 +151,7 @@ export function apply(ctx: ClientContext): void {
 
   ctx.effect(() => ctx.locale.register(LOCALE_NS, DICTIONARIES), 'dsh-harness-call: dictionaries')
   const t = ctx.locale.bind(LOCALE_NS)
+  registerRunTab(ctx, feed, t)
 
   /**
    * Which run the floating panel is showing, or `undefined` for closed. Closure
@@ -220,6 +222,7 @@ export function apply(ctx: ClientContext): void {
     { name: 'tool.call.toolview', key: TOOL_NAME },
     props => (
       <HarnessCallCard
+        ctx={ctx}
         callId={props.callId}
         sessionId={props.sessionId}
         block={props.block}

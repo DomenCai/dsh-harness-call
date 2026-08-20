@@ -1,7 +1,7 @@
 /**
  * Normalized run/event contract shared by the host and browser halves.
  *
- * ZERO RUNTIME DEPENDENCIES BY DESIGN. This file is compiled by both tsc
+ * ZERO PACKAGE DEPENDENCIES BY DESIGN. This file is compiled by both tsc
  * programs (host and client). Importing any `@deepseek-ai` package here would
  * drag that package's `declare module '@deepseek-ai/cordis'` augmentation into
  * whichever program picks it up, and the host and browser runtimes merge
@@ -25,19 +25,55 @@ export type HarnessEvent =
   | { kind: 'reasoning', text: string }
   /** Assistant-visible reply text (a delta, not the accumulated whole). */
   | { kind: 'text', text: string }
-  /** A tool/command invocation; `exitCode` is present once it has settled. */
+  /**
+   * A tool/command invocation in one shot. Kept for wire compatibility with
+   * events already stored or in flight; new adapters emit
+   * {@link HarnessEvent tool_start} / {@link HarnessEvent tool_finish} instead.
+   */
   | { kind: 'tool', name: string, input?: unknown, exitCode?: number }
+  /**
+   * A tool/command has been invoked. `callId` is the harness-native id (never
+   * synthesized): the client projects start/finish into one card by this key.
+   */
+  | { kind: 'tool_start', callId: string, name: string, input?: unknown }
+  /**
+   * A tool/command has settled. `name` is repeated so an orphan finish (start
+   * evicted from the ring buffer) can still render. `output` is the store-
+   * truncated text; adapters hand the full string to the store and never cut
+   * it themselves — semantic events are written to the raw log before append.
+   */
+  | {
+      kind: 'tool_finish'
+      callId: string
+      name: string
+      output?: string
+      outputTruncated?: boolean
+      outputOriginalBytes?: number
+      exitCode?: number
+    }
   /** A workspace file the harness created, edited, or deleted. */
   | { kind: 'file', path: string, change: 'create' | 'edit' | 'delete' }
   /** A run-level error the harness reported (not necessarily fatal). */
   | { kind: 'error', message: string }
-  /** Billing/turn accounting reported at the end of a run. */
-  | { kind: 'usage', costUsd?: number, turns?: number }
+  /** Billing/turn/token accounting reported during or at the end of a run. */
+  | {
+      kind: 'usage'
+      costUsd?: number
+      turns?: number
+      inputTokens?: number
+      outputTokens?: number
+      cachedTokens?: number
+      reasoningTokens?: number
+      model?: string
+    }
   /** Anything worth showing that has no richer normalized shape yet. */
   | { kind: 'note', text: string }
 
 /** Discriminant of {@link HarnessEvent}. */
 export type HarnessEventKind = HarnessEvent['kind']
+
+/** Default store cap for a `tool_finish.output`: 12 KiB head + 4 KiB tail. */
+export const DEFAULT_MAX_TOOL_OUTPUT_BYTES = 16384
 
 /**
  * A {@link HarnessEvent} after the store has accepted it.
@@ -121,6 +157,16 @@ export interface RunSummary {
   costUsd?: number
   /** Reported assistant turns, when the harness accounts for them. */
   turns?: number
+  /** Prompt tokens, when the harness accounts for them. */
+  inputTokens?: number
+  /** Completion tokens, when the harness accounts for them. */
+  outputTokens?: number
+  /** Cache-hit tokens, when the harness accounts for them. */
+  cachedTokens?: number
+  /** Reasoning/thinking tokens, when the harness accounts for them. */
+  reasoningTokens?: number
+  /** Model id the harness reported for this run, when it names one. */
+  model?: string
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "dsh-harness-call",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Delegate work to external coding agents (Claude Code / Codex CLI / Grok CLI / Kimi CLI) from DeepSeek Harness: a model-facing harness_call tool, @claude/@codex/@grok/@kimi mentions, live progress cards with a thinking/tool timeline, and a details side panel.",
   "license": "MIT",
   "type": "module",
@@ -76,6 +76,7 @@
     "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-typert-registry": "^0.1.0-rc.6",
     "@deepseek-ai/schemastery": "^3.18.1-rc.1",
+    "dsh-better-sidebar": "^0.12.3",
     "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
@@ -120,6 +121,9 @@
     },
     "react": {
       "optional": true
+    },
+    "dsh-better-sidebar": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -142,6 +146,7 @@
     "@deepseek-ai/schemastery": "^3.18.1",
     "@types/node": "^24.13.3",
     "@types/react": "~18.3.1",
+    "dsh-better-sidebar": "link:../DSH-better-sidebar",
     "lightningcss": "^1.33.0",
     "react": "^18.2.0",
     "tsdown": "0.22.2",

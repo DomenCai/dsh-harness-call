@@ -103,7 +103,15 @@ export interface RunResult {
   /** Human-readable failure reasons; empty on success. */
   readonly errors: readonly string[]
   /** Optional accounting the harness reported. */
-  readonly extras: { readonly costUsd?: number, readonly numTurns?: number }
+  readonly extras: {
+    readonly costUsd?: number
+    readonly numTurns?: number
+    readonly inputTokens?: number
+    readonly outputTokens?: number
+    readonly cachedTokens?: number
+    readonly reasoningTokens?: number
+    readonly model?: string
+  }
 }
 
 /**

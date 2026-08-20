@@ -22,8 +22,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import type { RunDetail, RunSummary, StoredEvent } from '../shared/events.js'
+import { projectActivities, type ActivityProjection } from './activities.js'
 import type { HarnessCallRemoteClient } from '../shared/wire.js'
 
 /**
@@ -228,25 +229,34 @@ export function useChannel(feed: RunFeed, active: boolean): ChannelStatus {
  * @param runs - the roster, newest `startedAt` first.
  * @param callId - the tool call this card was rendered for.
  * @param harness - the harness the call named, when the arguments parsed.
+ * @param startedBefore - upper bound on the GUESS only, for callers that are
+ *   reading a snapshot older than the roster: a run that began after their
+ *   snapshot cannot be theirs. Exact `callId` matches ignore it — they are
+ *   identity, not inference, and no clock can make them wrong.
  * @returns the matching run, or `undefined` while the host has none.
  */
 export function matchRun(
   runs: readonly RunSummary[],
   callId: string,
   harness: string | undefined,
+  startedBefore = Infinity,
 ): RunSummary | undefined {
   const exact = runs.find(run => run.callId === callId)
   if (exact !== undefined) return exact
   // The newest UNFINISHED run of the same harness: the granularity this plugin
   // had before runs were keyed, minus the finished runs that made a one-second-
   // old call report the elapsed time and session of its predecessor.
-  return runs.find(run => run.harness === harness && run.phase !== 'done')
+  return runs.find(run => {
+    return run.harness === harness && run.phase !== 'done' && run.startedAt <= startedBefore
+  })
 }
 
 /** One run as the panel sees it: the live summary plus the accumulated timeline. */
 export interface RunView {
   summary: RunSummary
   events: readonly StoredEvent[]
+  /** Start/finish projection of `events`; rebuilt whenever the timeline grows. */
+  activities: ActivityProjection
   text: string
 }
 
@@ -255,19 +265,22 @@ export interface RunView {
  *
  * @param feed - the page feed.
  * @param runId - the focused run; `undefined` while it is still unresolved.
- * @param settled - whether the tool call itself has already produced a result.
- *   It is what makes an `'unknown'` answer terminal: for a call still in flight
- *   the host may simply not have opened the record yet, but for a settled one
- *   the run existed and the store has since forgotten it, so asking again is
- *   asking forever.
- * @returns the accumulated view, or `undefined` before the first answer.
+ * @param authoritative - whether `runId` came from a source that KNOWS it (the
+ *   tool result, or a persisted target), as opposed to a roster guess. It is
+ *   what makes an `'unknown'` answer terminal: a guessed id may simply not be
+ *   in the store yet, but a known one names a run the store has forgotten, so
+ *   asking again is asking forever.
+ * @returns the accumulated view (or `undefined` before the first answer) and
+ *   whether a known run was confirmed missing from the in-memory store.
  */
 export function useRunDetail(
   feed: RunFeed,
   runId: string | undefined,
-  settled: boolean,
-): RunView | undefined {
+  authoritative: boolean,
+  active = true,
+): { view: RunView | undefined, missing: boolean } {
   const [view, setView] = useState<RunView | undefined>(undefined)
+  const [missing, setMissing] = useState(false)
   /**
    * Nothing more will ever arrive for this run, so the timer stops. Derived
    * from the ANSWERS, not from the caller's snapshot of the click: a card that
@@ -283,6 +296,7 @@ export function useRunDetail(
    * is dropped instead of appended to the wrong run.
    */
   const generation = useRef(0)
+  const inFlight = useRef(false)
 
   // Declared before the poll effect so a run change resets the accumulation
   // before the new run's first request can land.
@@ -290,35 +304,50 @@ export function useRunDetail(
     cursor.current = 0
     events.current = []
     generation.current += 1
+    inFlight.current = false
     setView(undefined)
     setTerminal(false)
+    setMissing(false)
   }, [runId])
 
   const load = useCallback(async (): Promise<void> => {
-    if (runId === undefined) return
+    if (runId === undefined || inFlight.current) return
     const issued = generation.current
-    const detail = await feed.detail(runId, cursor.current)
-    if (issued !== generation.current || detail === undefined) return
-    if (detail === 'unknown') {
-      if (settled) setTerminal(true)
-      return
+    inFlight.current = true
+    try {
+      const detail = await feed.detail(runId, cursor.current)
+      if (issued !== generation.current || detail === undefined) return
+      if (detail === 'unknown') {
+        if (authoritative) {
+          setTerminal(true)
+          setMissing(true)
+        }
+        return
+      }
+      cursor.current = detail.cursor
+      if (detail.events.length > 0) events.current = [...events.current, ...detail.events]
+      if (detail.summary.phase === 'done') setTerminal(true)
+      setView({
+        summary: detail.summary,
+        events: events.current,
+        activities: projectActivities(events.current),
+        text: detail.text,
+      })
+    } finally {
+      if (issued === generation.current) inFlight.current = false
     }
-    cursor.current = detail.cursor
-    if (detail.events.length > 0) events.current = [...events.current, ...detail.events]
-    if (detail.summary.phase === 'done') setTerminal(true)
-    setView({ summary: detail.summary, events: events.current, text: detail.text })
-  }, [feed, runId, settled])
+  }, [feed, runId, authoritative])
 
   useEffect(() => {
-    if (runId === undefined || terminal) return
+    if (!active || runId === undefined || terminal) return
     void load()
     const timer = window.setInterval(() => { void load() }, POLL_MS)
     return () => { window.clearInterval(timer) }
-  }, [load, runId, terminal])
+  }, [load, runId, terminal, active])
 
   useEffect(() => () => { generation.current += 1 }, [])
 
-  return view
+  return { view, missing }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -374,6 +403,43 @@ export function readArgs(block: ToolCallBlock): CallArgs {
   return { harness: asText(args?.harness), prompt: asText(args?.prompt) }
 }
 
+/**
+ * What a card hands a run surface when it is clicked. A snapshot of that
+ * moment, never refreshed: nothing here may be used as a liveness signal.
+ *
+ * A SIDEBAR TAB PERSISTS THIS. The host store does not survive a restart, so
+ * every field has to stay meaningful when it is read back against an empty
+ * store — which is what {@link PanelTarget.openedAt} is for.
+ */
+export interface PanelTarget {
+  /** The tool call the card was rendered for; the correlation key. */
+  callId: string
+  /**
+   * The conversation session the card lives in. Overlay and sidebar both
+   * need it: overlay is root-scoped, sidebar openTab is session-scoped.
+   */
+  sessionId: SessionId
+  harness: string | undefined
+  label: string
+  /** The prompt the model composed. */
+  prompt: string | undefined
+  /**
+   * The host's run handle, when the card already had one: `result.runId` on a
+   * settled call, the matched roster summary's on a running one. Its presence
+   * is what makes an `'unknown'` detail answer terminal rather than "not yet".
+   */
+  runId: string | undefined
+  /**
+   * Wall clock at the click. Two jobs, both about a restarted host:
+   * a run started AFTER this instant cannot be the one this target names, and
+   * a search that has outlived its grace period is looking for a run that no
+   * longer exists.
+   */
+  openedAt: number
+  /** The settled tool result, when there is one. */
+  result: HarnessResult | undefined
+}
+
 /** The fields this half reads out of the tool's own return value. */
 export interface HarnessResult {
   ok: boolean
@@ -395,6 +461,8 @@ export interface HarnessResult {
    */
   turns: number | undefined
   errors: readonly string[]
+  /** Trailing stderr lines the host surfaces on a failed run. */
+  stderrTail: readonly string[]
   text: string
 }
 
@@ -439,6 +507,7 @@ export function readResult(block: ToolCallBlock): HarnessResult | undefined {
     costUsd: asNumber(value.costUsd),
     turns: asNumber(value.numTurns),
     errors: asTexts(value.errors),
+    stderrTail: asTexts(value.stderrTail),
     text: asText(value.text) ?? '',
   }
 }

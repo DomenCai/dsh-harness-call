@@ -10,7 +10,7 @@
 import { HARNESS_LABELS } from '../../shared/harness.js'
 import type { HarnessEvent } from '../../shared/events.js'
 import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.js'
-import { exitFailure, isRecord, readNumber, readRecord, readString } from './native.js'
+import { exitFailure, isRecord, missingCallId, readNumber, readRecord, readString, toolOutputText } from './native.js'
 
 /**
  * Claude reports the run's verdict in one terminal `result` event carrying the
@@ -21,6 +21,11 @@ import { exitFailure, isRecord, readNumber, readRecord, readString } from './nat
 export interface ClaudeState extends RunState {
   /** The terminal `type: "result"` event, once seen. */
   result?: Record<string, unknown>
+  /**
+   * `tool_use.id` → tool name, so a `tool_result` block (which carries no
+   * name of its own) can still render if the matching start was dropped.
+   */
+  tools: Map<string, string>
 }
 
 export const claudeAdapter: HarnessAdapter<ClaudeState> = {
@@ -29,7 +34,7 @@ export const claudeAdapter: HarnessAdapter<ClaudeState> = {
   bin: 'claude',
 
   createState(): ClaudeState {
-    return { text: '' }
+    return { text: '', tools: new Map() }
   },
 
   build(req: RunRequest): SpawnSpec {
@@ -87,10 +92,47 @@ export const claudeAdapter: HarnessAdapter<ClaudeState> = {
         } else if (blockType === 'tool_use') {
           const name = readString(block, 'name')
           if (name === undefined) continue
+          const callId = readString(block, 'id')
+          if (callId === undefined) {
+            events.push(missingCallId(`tool ${name} started`))
+            continue
+          }
+          state.tools.set(callId, name)
           // The whole input is kept: the panel expands it on demand, and a
           // shortened one could not be inspected after the fact.
-          events.push({ kind: 'tool', name, input: block['input'] })
+          const input = block['input']
+          events.push(input === undefined
+            ? { kind: 'tool_start', callId, name }
+            : { kind: 'tool_start', callId, name, input })
         }
+      }
+      return events
+    }
+
+    if (type === 'user') {
+      // Tool results ride as `tool_result` blocks on a user frame. Sub-agent
+      // traffic is tagged the same way as assistant frames and is dropped.
+      if (native['parent_tool_use_id']) return []
+      const content = readRecord(native, 'message')?.['content']
+      if (!Array.isArray(content)) return []
+      const events: HarnessEvent[] = []
+      for (const block of content) {
+        if (!isRecord(block) || block['type'] !== 'tool_result') continue
+        const callId = readString(block, 'tool_use_id')
+        const name = (callId !== undefined ? state.tools.get(callId) : undefined) ?? 'tool'
+        if (callId === undefined) {
+          events.push(missingCallId(`tool ${name} completed`))
+          continue
+        }
+        const output = toolResultOutput(block)
+        const isError = block['is_error'] === true
+        events.push({
+          kind: 'tool_finish',
+          callId,
+          name,
+          ...(output !== undefined ? { output } : {}),
+          exitCode: isError ? 1 : 0,
+        })
       }
       return events
     }
@@ -102,12 +144,11 @@ export const claudeAdapter: HarnessAdapter<ClaudeState> = {
 
     if (type === 'result') {
       state.result = native
-      const costUsd = readNumber(native, 'total_cost_usd')
-      const turns = readNumber(native, 'num_turns')
+      const usage = claudeUsage(native)
       // A `result` event that accounts for nothing is not worth a timeline
       // entry of its own; `finalize` still reads the event from state.
-      if (costUsd === undefined && turns === undefined) return []
-      return [{ kind: 'usage', costUsd, turns }]
+      if (!hasUsage(usage)) return []
+      return [{ kind: 'usage', ...usage }]
     }
 
     return []
@@ -138,7 +179,91 @@ export const claudeAdapter: HarnessAdapter<ClaudeState> = {
       text: finalText !== undefined && finalText.length > 0 ? finalText : state.text,
       sessionId: readString(result, 'session_id') ?? null,
       errors,
-      extras: { costUsd: readNumber(result, 'total_cost_usd'), numTurns: readNumber(result, 'num_turns') },
+      extras: extrasFromUsage(claudeUsage(result)),
     }
   },
+}
+
+/** Flatten one `tool_result` block's content into the stored output string. */
+function toolResultOutput(block: Record<string, unknown>): string | undefined {
+  const content = block['content']
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    const parts: string[] = []
+    for (const part of content) {
+      if (typeof part === 'string') {
+        parts.push(part)
+        continue
+      }
+      if (!isRecord(part)) continue
+      const text = readString(part, 'text') ?? readString(part, 'content')
+      if (text !== undefined) parts.push(text)
+    }
+    if (parts.length > 0) return parts.join('')
+  }
+  return toolOutputText(content)
+}
+
+/** Model id Claude reported: `modelUsage` keys first, then a flat `model`. */
+function claudeModel(native: Record<string, unknown> | undefined): string | undefined {
+  if (native === undefined) return undefined
+  const usage = readRecord(native, 'modelUsage')
+  if (usage !== undefined) {
+    const keys = Object.keys(usage)
+    const first = keys[0]
+    if (first !== undefined) {
+      const bracket = first.indexOf('[')
+      return bracket > 0 ? first.slice(0, bracket) : first
+    }
+  }
+  return readString(native, 'model')
+}
+
+function claudeUsage(native: Record<string, unknown> | undefined): {
+  costUsd?: number
+  turns?: number
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  model?: string
+} {
+  if (native === undefined) return {}
+  const usage = readRecord(native, 'usage')
+  const cached = readNumber(usage, 'cache_read_input_tokens')
+  const created = readNumber(usage, 'cache_creation_input_tokens')
+  const cachedTokens = cached === undefined && created === undefined
+    ? undefined
+    : (cached ?? 0) + (created ?? 0)
+  return {
+    costUsd: readNumber(native, 'total_cost_usd'),
+    turns: readNumber(native, 'num_turns'),
+    inputTokens: readNumber(usage, 'input_tokens'),
+    outputTokens: readNumber(usage, 'output_tokens'),
+    cachedTokens,
+    model: claudeModel(native),
+  }
+}
+
+function hasUsage(usage: Record<string, unknown>): boolean {
+  return Object.values(usage).some(value => value !== undefined)
+}
+
+function extrasFromUsage(usage: {
+  costUsd?: number
+  turns?: number
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  reasoningTokens?: number
+  model?: string
+}): RunResult['extras'] {
+  return {
+    costUsd: usage.costUsd,
+    numTurns: usage.turns,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cachedTokens: usage.cachedTokens,
+    reasoningTokens: usage.reasoningTokens,
+    model: usage.model,
+  }
 }

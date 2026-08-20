@@ -1,5 +1,5 @@
 /**
- * Readers for untrusted harness output, shared by the three adapters.
+ * Readers for untrusted harness output, shared by the adapters.
  *
  * Every `translate` is handed `unknown`: one line of another process's stdout,
  * parsed as JSON and validated by nobody. These readers are the only place
@@ -10,6 +10,7 @@
  * @module dsh-harness-call/host/adapters/native
  */
 
+import type { HarnessEvent } from '../../shared/events.js'
 import type { Outcome } from '../adapter.js'
 
 /**
@@ -40,6 +41,34 @@ export function readRecord(source: unknown, key: string): Record<string, unknown
   if (!isRecord(source)) return undefined
   const value = source[key]
   return isRecord(value) ? value : undefined
+}
+
+/**
+ * Flatten untrusted tool output onto a string the store can cap.
+ *
+ * Adapters must not truncate: this only chooses a representation. A string
+ * is kept as-is; nested JSON is stringified; anything else falls back to
+ * `String`. `undefined` means there was nothing to show.
+ */
+export function toolOutputText(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value === 'string') return value
+  try {
+    const text = JSON.stringify(value)
+    return text === undefined ? String(value) : text
+  } catch {
+    return String(value)
+  }
+}
+
+/**
+ * Drop a start/finish that has no harness-native call id.
+ *
+ * Synthesizing an id would send the client projection down its orphan path
+ * with a key that never matches anything. A note still marks the work.
+ */
+export function missingCallId(label: string): HarnessEvent {
+  return { kind: 'note', text: label }
 }
 
 /**

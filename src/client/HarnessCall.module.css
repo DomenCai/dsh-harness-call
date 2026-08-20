@@ -20,8 +20,14 @@
   transition: border-color 0.15s;
 }
 
-.card:hover {
+.card:hover,
+.card:focus-visible {
   border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.card:focus-visible {
+  outline: 2px solid color-mix(in srgb, currentColor 55%, transparent);
+  outline-offset: 2px;
 }
 
 .head {
@@ -119,9 +125,9 @@
   flex-direction: column;
   /* The rounded corners clip the head/foot rules and the body's scrollbar. */
   overflow: hidden;
-  width: min(420px, calc(100% - 32px));
+  width: min(520px, calc(100% - 32px));
   min-height: 0;
-  max-height: min(60%, 560px);
+  max-height: min(72%, 720px);
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   border-radius: 12px;
   background: var(--dsw-alias-bg-base, canvas);
@@ -517,4 +523,118 @@
   font-size: 13px;
   line-height: 20px;
   opacity: 0.9;
+}
+
+/* ── run view (overlay body + sidebar tab) ── */
+
+.runView {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.runHead {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.panel > .runView {
+  flex: 1;
+  min-height: 0;
+}
+
+.panel > .runView > .runHead {
+  padding-top: 8px;
+}
+
+.runHeadText {
+  min-width: 0;
+  flex: 1;
+}
+
+.runTitle {
+  font-weight: 600;
+}
+
+.runMetaPrimary {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.runMetaSecondary {
+  margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  opacity: 0.62;
+  word-break: break-all;
+}
+
+.runBody {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  padding: 12px 14px;
+  line-height: 1.6;
+}
+
+.toolCard,
+.toolCardCompact {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+.toolCardCompact {
+  padding: 6px 8px;
+}
+
+.toolCardHead {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.toolCardMeta {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.toolTerminal,
+.toolOutput {
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.toolOutputLabel {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+.toolTruncated,
+.toolCapToggle {
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.toolCapToggle {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
 }
