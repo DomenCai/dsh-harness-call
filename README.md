@@ -1,5 +1,7 @@
 # dsh-harness-call
 
+[简体中文](README.zh.md)
+
 Delegate work to external coding agents — **Claude Code**, **Codex CLI**, **Grok CLI**, **Kimi CLI** — from inside [DeepSeek Harness](https://www.npmjs.com/package/@deepseek-ai/dsh) (DSH).
 
 One model-facing `harness_call` tool, `@claude` / `@codex` / `@grok` / `@kimi` composer mentions, live progress cards with a thinking/tool-call timeline, and a details side panel — with every harness translated into one normalized event model, so adding another CLI is a host-side change only.

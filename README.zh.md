@@ -1,5 +1,7 @@
 # dsh-harness-call
 
+[English](README.md)
+
 在 [DeepSeek Harness](https://www.npmjs.com/package/@deepseek-ai/dsh)（DSH）里把工作委托给外部 coding agent——**Claude Code**、**Codex CLI**、**Grok CLI**、**Kimi CLI**。
 
 一个面向模型的 `harness_call` 工具、`@claude` / `@codex` / `@grok` / `@kimi` 输入框提及、带思考/工具调用时间线的实时进度卡片，以及详情侧栏；所有 harness 都被翻译成同一套规范化事件模型，新增一个 CLI 只动 host 侧。
