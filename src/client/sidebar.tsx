@@ -52,10 +52,8 @@ function readStoredResult(value: unknown): HarnessResult | undefined {
   return {
     ok: value.ok === true,
     runId: asText(value.runId),
-    label: asText(value.label),
     mode: asText(value.mode),
     sessionId: asText(value.sessionId),
-    cwd: asText(value.cwd),
     elapsedMs: asNumber(value.elapsedMs),
     steps: asNumber(value.steps),
     costUsd: asNumber(value.costUsd),

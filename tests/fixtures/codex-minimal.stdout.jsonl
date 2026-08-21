@@ -1,0 +1,9 @@
+{"type":"thread.started","thread_id":"codex-session"}
+{"type":"item.completed","item":{"type":"reasoning","id":"reason-1","text":"Inspecting fixture."}}
+{"type":"item.started","item":{"type":"command_execution","id":"codex-command-1","command":"echo fixture"}}
+{"type":"item.completed","item":{"type":"command_execution","id":"codex-command-1","command":"echo fixture","status":"completed","exit_code":0,"aggregated_output":"fixture output\n"}}
+{"type":"item.completed","item":{"type":"web_search","id":"codex-search-1","query":"fixture query","status":"completed","output":"fixture search result"}}
+{"type":"item.completed","item":{"type":"file_change","id":"codex-file-1","changes":[{"path":"src/example.ts","kind":"add"}]}}
+{"type":"item.completed","item":{"type":"agent_message","id":"message-1","text":"First response."}}
+{"type":"item.completed","item":{"type":"agent_message","id":"message-2","text":"Final response."}}
+{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":5,"output_tokens":8,"reasoning_output_tokens":3,"model":"codex-fixture"}}

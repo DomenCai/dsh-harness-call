@@ -1,0 +1,91 @@
+{
+  "events": [
+    {
+      "kind": "reasoning",
+      "text": "Inspecting "
+    },
+    {
+      "kind": "reasoning",
+      "text": "fixture."
+    },
+    {
+      "kind": "text",
+      "text": "First response."
+    },
+    {
+      "kind": "tool_start",
+      "callId": "grok-tool-1",
+      "name": "read_file",
+      "input": {
+        "target_file": "README.md"
+      }
+    },
+    {
+      "kind": "tool_finish",
+      "callId": "grok-tool-1",
+      "name": "read_file",
+      "output": "fixture output"
+    },
+    {
+      "kind": "text",
+      "text": "\n\nFinal response."
+    },
+    {
+      "kind": "usage",
+      "inputTokens": 30,
+      "outputTokens": 10,
+      "cachedTokens": 4,
+      "reasoningTokens": 6,
+      "model": "grok-fixture"
+    },
+    {
+      "kind": "usage",
+      "costUsd": 0.02,
+      "turns": 1,
+      "inputTokens": 30,
+      "outputTokens": 10,
+      "cachedTokens": 4,
+      "reasoningTokens": 6,
+      "model": "grok-fixture"
+    }
+  ],
+  "spawn": {
+    "argv": [
+      "-p",
+      {
+        "ref": "run.start.prompt"
+      },
+      "--cwd",
+      "/fixture/project",
+      "--session-id",
+      "grok-session",
+      "--output-format",
+      "streaming-json",
+      "--background-wait-timeout",
+      "120",
+      "--reasoning-effort",
+      "high",
+      "--sandbox",
+      "read-only",
+      "--permission-mode",
+      "dontAsk"
+    ],
+    "stdin": null,
+    "env": {}
+  },
+  "result": {
+    "ok": true,
+    "text": "First response.\n\nFinal response.",
+    "sessionId": "grok-session",
+    "errors": [],
+    "extras": {
+      "costUsd": 0.02,
+      "turns": 1,
+      "inputTokens": 30,
+      "outputTokens": 10,
+      "cachedTokens": 4,
+      "reasoningTokens": 6,
+      "model": "grok-fixture"
+    }
+  }
+}

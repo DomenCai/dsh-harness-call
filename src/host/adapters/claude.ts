@@ -10,7 +10,7 @@
 import { HARNESS_LABELS } from '../../shared/harness.js'
 import type { HarnessEvent } from '../../shared/events.js'
 import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.js'
-import { exitFailure, isRecord, missingCallId, readNumber, readRecord, readString, toolOutputText } from './native.js'
+import { exitFailure, hasDefined, isRecord, missingCallId, readNumber, readRecord, readString, toolOutputText } from './native.js'
 
 /**
  * Claude reports the run's verdict in one terminal `result` event carrying the
@@ -41,10 +41,17 @@ export const claudeAdapter: HarnessAdapter<ClaudeState> = {
     const argv = ['--print', '--verbose', '--output-format', 'stream-json']
     argv.push(req.mode === 'resume' ? '--resume' : '--session-id', req.sessionId)
     if (req.access === 'read-only') {
-      // Headless Claude has no OS sandbox flag. `plan` keeps it from applying
-      // edits or running mutating tools; that is the closest match to
-      // read-only among the published permission modes.
-      argv.push('--permission-mode', 'plan')
+      // Headless Claude has no OS sandbox. `plan` would switch the agent into
+      // plan workflow (ExitPlanMode and similar), so read-only stays on
+      // ordinary `dontAsk` and a built-in tool allowlist. `--tools` is
+      // variadic: one comma-separated argument, otherwise later flags such as
+      // `--effort` are swallowed as tool names.
+      argv.push(
+        '--permission-mode',
+        'dontAsk',
+        '--tools',
+        'Read,Glob,Grep,WebFetch,WebSearch',
+      )
     } else if (req.access === 'workspace-write') {
       argv.push('--permission-mode', 'acceptEdits')
     } else if (req.access === 'full-access') {
@@ -131,7 +138,7 @@ export const claudeAdapter: HarnessAdapter<ClaudeState> = {
           callId,
           name,
           ...(output !== undefined ? { output } : {}),
-          exitCode: isError ? 1 : 0,
+          ...(isError ? { failed: true as const } : {}),
         })
       }
       return events
@@ -147,11 +154,12 @@ export const claudeAdapter: HarnessAdapter<ClaudeState> = {
       const usage = claudeUsage(native)
       // A `result` event that accounts for nothing is not worth a timeline
       // entry of its own; `finalize` still reads the event from state.
-      if (!hasUsage(usage)) return []
+      if (!hasDefined(usage)) return []
       return [{ kind: 'usage', ...usage }]
     }
 
-    return []
+    // Match the other adapters: an unknown frame still marks work in the timeline.
+    return [{ kind: 'note', text: String(type) }]
   },
 
   finalize(state: ClaudeState, outcome: Outcome, info: RunInfo): RunResult {
@@ -179,7 +187,7 @@ export const claudeAdapter: HarnessAdapter<ClaudeState> = {
       text: finalText !== undefined && finalText.length > 0 ? finalText : state.text,
       sessionId: readString(result, 'session_id') ?? null,
       errors,
-      extras: extrasFromUsage(claudeUsage(result)),
+      extras: claudeUsage(result),
     }
   },
 }
@@ -241,29 +249,5 @@ function claudeUsage(native: Record<string, unknown> | undefined): {
     outputTokens: readNumber(usage, 'output_tokens'),
     cachedTokens,
     model: claudeModel(native),
-  }
-}
-
-function hasUsage(usage: Record<string, unknown>): boolean {
-  return Object.values(usage).some(value => value !== undefined)
-}
-
-function extrasFromUsage(usage: {
-  costUsd?: number
-  turns?: number
-  inputTokens?: number
-  outputTokens?: number
-  cachedTokens?: number
-  reasoningTokens?: number
-  model?: string
-}): RunResult['extras'] {
-  return {
-    costUsd: usage.costUsd,
-    numTurns: usage.turns,
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
-    cachedTokens: usage.cachedTokens,
-    reasoningTokens: usage.reasoningTokens,
-    model: usage.model,
   }
 }

@@ -1,10 +1,12 @@
 /**
  * The `harness_call` tool card.
  *
- * Two states, one component. While the call is in flight the card is the only
+ * Three states, one component. While the call is in flight the card is the only
  * window into a process that runs for minutes: it names the harness, counts the
  * events the host has recorded, says what the external agent is doing right now,
- * and shows the prompt the model composed. Once the call settles the same card
+ * and shows the prompt the model composed. When the host run is already `done`
+ * but DSH has not yet written the tool-result block, the same roster row shows
+ * a frozen complete state without the reply. Once the call settles the card
  * becomes a result: reply preview, session identity, and the full text behind a
  * disclosure. Either way, clicking it opens the floating run panel.
  *
@@ -22,7 +24,7 @@ import type { RunSummary } from '../shared/events.js'
 import { HARNESS_LABELS, isHarnessKey } from '../shared/harness.js'
 import type { HarnessTranslate } from './contracts.js'
 import css from './HarnessCall.module.css'
-import { brief, matchRun, readArgs, readResult, seconds, useChannel, useRoster, type PanelTarget, type RunFeed } from './runs.js'
+import { brief, matchRun, readArgs, readResult, seconds, unsettledCardState, useChannel, useRoster, type PanelTarget, type RunFeed } from './runs.js'
 import { tryOpenSidebarTab } from './sidebar.js'
 
 /** Cap of the prompt excerpt shown on a running card. */
@@ -79,7 +81,7 @@ export function HarnessCallCard(props: {
   const runs = useRoster(feed, !settled)
   const channel = useChannel(feed, !settled)
   const summary = settled ? undefined : matchRun(runs, callId, args.harness)
-  const label = result?.label ?? summary?.label ?? harnessLabel(args.harness)
+  const label = summary?.label ?? harnessLabel(args.harness)
   const channelError = settled ? undefined : channel.error
 
   // A running card has no result to read a runId off, but by the time it is
@@ -142,6 +144,31 @@ export function HarnessCallCard(props: {
               <div className={css.disclosureText}>{text}</div>
             </details>
           </div>
+        )}
+      </div>
+    )
+  }
+
+  const pending = unsettledCardState(summary, callId, Date.now())
+  if (pending.kind === 'hostDone') {
+    const head: string[] = []
+    if (pending.elapsedMs !== undefined) head.push(`${seconds(pending.elapsedMs)}s`)
+    head.push(t('card.events', { n: pending.eventCount }))
+    return (
+      <div className={css.card} role="button" tabIndex={0} title={t('card.openDone')} onClick={open} onKeyDown={onKey}>
+        <div className={css.head}>
+          <StateDot state={pending.ok ? 'done' : 'error'} className={css.dot} />
+          <span className={css.label}>{label}</span>
+          <span className={css.meta}>{head.join(' · ')}</span>
+        </div>
+        <div className={css.status}>{t('card.hostDonePending')}</div>
+        {pending.sessionId !== null && (
+          <div className={css.meta}>
+            {`session ${pending.sessionId} · ${t(summary?.mode === 'resume' ? 'card.sessionResume' : 'card.sessionNew')}`}
+          </div>
+        )}
+        {pending.errors.length > 0 && (
+          <div className={css.cardErrors}>{pending.errors.slice(0, CARD_ERROR_LINES).join('\n')}</div>
         )}
       </div>
     )

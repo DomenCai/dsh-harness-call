@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"claude-session","cwd":"/fixture/project"}
+{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Inspecting fixture."},{"type":"text","text":"First response."},{"type":"tool_use","id":"claude-tool-1","name":"Read","input":{"path":"README.md"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"claude-tool-1","content":[{"type":"text","text":"fixture output"}]}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":" Final response."}]}}
+{"type":"result","subtype":"success","is_error":false,"session_id":"claude-session","result":"First response. Final response.","total_cost_usd":0.01,"num_turns":2,"usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":2,"cache_creation_input_tokens":1},"modelUsage":{"claude-fixture[1m]":{}}}

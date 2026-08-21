@@ -47,8 +47,8 @@ export interface RunOpenSpec {
   readonly harness: string
   readonly label: string
   readonly mode: RunSummary['mode']
-  /** The requested session id, before the harness confirms one. */
-  readonly sessionId: string
+  /** Requested id for caller-named sessions, or null until the harness reports one. */
+  readonly sessionId: string | null
   readonly cwd: string
   /** The full prompt; the store keeps only a preview plus its length. */
   readonly prompt: string
@@ -170,8 +170,8 @@ function toSummary(record: RunRecord): RunSummary {
 /**
  * Copy one accepted event into its stored shape, keeping only DEFINED values.
  *
- * Adapters build events by habit (`{ kind: 'tool', name, input: frame.input }`),
- * and a habit that names a key with an `undefined` value is invisible to the
+ * Adapters build sparse events by habit, and naming a key with an `undefined`
+ * value is invisible to the
  * type system but fatal at the Remote boundary — same `assertJsonValue` rule
  * as {@link toSummary}. The store is the one chokepoint every event crosses,
  * so the guarantee is made here instead of in every adapter.
@@ -255,15 +255,7 @@ export class RunStore {
         record.sessionId = result.sessionId
         record.finishedAt = finishedAt
         record.elapsedMs = finishedAt - record.startedAt
-        applyUsage(record, {
-          costUsd: result.extras.costUsd,
-          turns: result.extras.numTurns,
-          inputTokens: result.extras.inputTokens,
-          outputTokens: result.extras.outputTokens,
-          cachedTokens: result.extras.cachedTokens,
-          reasoningTokens: result.extras.reasoningTokens,
-          model: result.extras.model,
-        })
+        applyUsage(record, result.extras)
         // A finishing run is the moment a previously unevictable run becomes
         // evictable, so the bound converges even if no further run opens.
         this.evict()

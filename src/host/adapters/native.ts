@@ -43,6 +43,11 @@ export function readRecord(source: unknown, key: string): Record<string, unknown
   return isRecord(value) ? value : undefined
 }
 
+/** Whether a sparse normalized object contains at least one defined field. */
+export function hasDefined(value: Record<string, unknown>): boolean {
+  return Object.values(value).some(entry => entry !== undefined)
+}
+
 /**
  * Flatten untrusted tool output onto a string the store can cap.
  *

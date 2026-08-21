@@ -1,0 +1,8 @@
+{"type":"thought","data":"Inspecting "}
+{"type":"thought","data":"fixture."}
+{"type":"text","data":"First response."}
+{"type":"tool_call","toolCallId":"grok-tool-1","toolName":"read_file","title":"read_file","status":"pending","rawInput":{"target_file":"README.md"}}
+{"type":"tool_call_update","toolCallId":"grok-tool-1","status":"completed","rawOutput":{"FileContent":{"content":"fixture output"}}}
+{"type":"text","data":"Final response."}
+{"type":"usage","usage":{"input_tokens":30,"output_tokens":10,"cache_read_input_tokens":4,"reasoning_tokens":6,"model":"grok-fixture"}}
+{"type":"end","sessionId":"grok-session","stopReason":"EndTurn","total_cost_usd":0.02,"num_turns":1,"usage":{"input_tokens":30,"output_tokens":10,"cache_read_input_tokens":4,"reasoning_tokens":6,"model":"grok-fixture"}}

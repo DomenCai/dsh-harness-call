@@ -44,15 +44,11 @@ export interface ActivityProjection {
   orphans: ToolActivity[]
 }
 
-function failedExit(exitCode: number | undefined): boolean {
-  return exitCode !== undefined && exitCode !== 0
-}
-
 function finishFields(event: StoredEvent & { kind: 'tool_finish' }): Partial<ToolActivity> & Pick<ToolActivity, 'status'> {
   return {
     finishSeq: event.seq,
     finishAt: event.at,
-    status: failedExit(event.exitCode) ? 'failed' : 'done',
+    status: event.failed === true ? 'failed' : 'done',
     ...(event.output !== undefined ? { output: event.output } : {}),
     ...(event.outputTruncated === true ? { outputTruncated: true } : {}),
     ...(event.outputOriginalBytes !== undefined ? { outputOriginalBytes: event.outputOriginalBytes } : {}),
@@ -112,7 +108,13 @@ export function projectActivities(events: readonly StoredEvent[]): ActivityProje
   return { tools, orphans }
 }
 
-/** Compact byte count for truncation labels (16 KB, 1.2 MB). Uses 1024-based units. */
+/**
+ * Compact byte count for truncation labels (16 KB, 1.2 MB). Uses 1024-based units.
+ *
+ * Deliberately separate from `formatBytes` in `src/host/tool.ts`, which drops the
+ * space and the `B` (`5.4K`) because that one spends model tokens. Same rounding,
+ * different density for a different audience — keep them in sync only in rounding.
+ */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) {
@@ -199,23 +201,4 @@ export function languageOf(path: string | undefined): string | undefined {
   if (path === undefined) return undefined
   const extension = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
   return /^[a-z0-9]{1,12}$/.test(extension) && extension.length < path.length ? extension : undefined
-}
-
-/**
- * A legacy one-shot tool event as a settled card, so pre-protocol runs still
- * render. The callId is only a React key — it is never sent back.
- */
-export function legacyToolActivity(event: StoredEvent & { kind: 'tool' }): ToolActivity {
-  const failed = failedExit(event.exitCode)
-  return {
-    callId: 'legacy:' + event.seq,
-    name: event.name,
-    startSeq: event.seq,
-    startAt: event.at,
-    finishSeq: event.seq,
-    finishAt: event.at,
-    status: event.exitCode === undefined ? 'running' : failed ? 'failed' : 'done',
-    ...(event.input !== undefined ? { input: event.input } : {}),
-    ...(event.exitCode !== undefined ? { exitCode: event.exitCode } : {}),
-  }
 }

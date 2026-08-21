@@ -1,0 +1,89 @@
+{
+  "events": [
+    {
+      "kind": "session",
+      "sessionId": "codex-session"
+    },
+    {
+      "kind": "reasoning",
+      "text": "Inspecting fixture."
+    },
+    {
+      "kind": "tool_start",
+      "callId": "codex-command-1",
+      "name": "command_execution",
+      "input": "echo fixture"
+    },
+    {
+      "kind": "tool_finish",
+      "callId": "codex-command-1",
+      "name": "command_execution",
+      "output": "fixture output\n",
+      "exitCode": 0
+    },
+    {
+      "kind": "tool_start",
+      "callId": "codex-search-1",
+      "name": "web_search",
+      "input": "fixture query"
+    },
+    {
+      "kind": "tool_finish",
+      "callId": "codex-search-1",
+      "name": "web_search",
+      "output": "fixture search result"
+    },
+    {
+      "kind": "file",
+      "path": "src/example.ts",
+      "change": "create"
+    },
+    {
+      "kind": "text",
+      "text": "First response."
+    },
+    {
+      "kind": "text",
+      "text": "\n\nFinal response."
+    },
+    {
+      "kind": "usage",
+      "inputTokens": 20,
+      "outputTokens": 8,
+      "cachedTokens": 5,
+      "reasoningTokens": 3,
+      "model": "codex-fixture"
+    }
+  ],
+  "spawn": {
+    "argv": [
+      "exec",
+      "--json",
+      "-c",
+      "model_reasoning_effort=\"high\"",
+      "--sandbox",
+      "workspace-write",
+      "--skip-git-repo-check",
+      "--cd",
+      "/fixture/project",
+      "-"
+    ],
+    "stdin": {
+      "ref": "run.start.prompt"
+    },
+    "env": {}
+  },
+  "result": {
+    "ok": true,
+    "text": "First response.\n\nFinal response.",
+    "sessionId": "codex-session",
+    "errors": [],
+    "extras": {
+      "inputTokens": 20,
+      "outputTokens": 8,
+      "cachedTokens": 5,
+      "reasoningTokens": 3,
+      "model": "codex-fixture"
+    }
+  }
+}

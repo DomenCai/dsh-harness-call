@@ -1,0 +1,80 @@
+{
+  "events": [
+    {
+      "kind": "session",
+      "sessionId": "claude-session"
+    },
+    {
+      "kind": "reasoning",
+      "text": "Inspecting fixture."
+    },
+    {
+      "kind": "text",
+      "text": "First response."
+    },
+    {
+      "kind": "tool_start",
+      "callId": "claude-tool-1",
+      "name": "Read",
+      "input": {
+        "path": "README.md"
+      }
+    },
+    {
+      "kind": "tool_finish",
+      "callId": "claude-tool-1",
+      "name": "Read",
+      "output": "fixture output"
+    },
+    {
+      "kind": "text",
+      "text": " Final response."
+    },
+    {
+      "kind": "usage",
+      "costUsd": 0.01,
+      "turns": 2,
+      "inputTokens": 10,
+      "outputTokens": 5,
+      "cachedTokens": 3,
+      "model": "claude-fixture"
+    }
+  ],
+  "spawn": {
+    "argv": [
+      "--print",
+      "--verbose",
+      "--output-format",
+      "stream-json",
+      "--session-id",
+      "claude-session",
+      "--permission-mode",
+      "dontAsk",
+      "--tools",
+      "Read,Glob,Grep,WebFetch,WebSearch",
+      "--effort",
+      "high"
+    ],
+    "stdin": {
+      "ref": "run.start.prompt"
+    },
+    "env": {
+      "ANTHROPIC_AUTH_TOKEN": null,
+      "ANTHROPIC_BASE_URL": null
+    }
+  },
+  "result": {
+    "ok": true,
+    "text": "First response. Final response.",
+    "sessionId": "claude-session",
+    "errors": [],
+    "extras": {
+      "costUsd": 0.01,
+      "turns": 2,
+      "inputTokens": 10,
+      "outputTokens": 5,
+      "cachedTokens": 3,
+      "model": "claude-fixture"
+    }
+  }
+}

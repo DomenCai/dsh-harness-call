@@ -1,0 +1,17 @@
+{
+  "captureVersion": 1,
+  "harness": "claude",
+  "prompt": "Explain the fixture protocol.",
+  "cwd": "/fixture/project",
+  "mode": "new",
+  "sessionId": "claude-session",
+  "access": "read-only",
+  "effort": "high",
+  "timeoutSeconds": 120,
+  "outcome": {
+    "exitCode": 0,
+    "signal": null
+  },
+  "timedOut": false,
+  "aborted": false
+}

@@ -1,6 +1,6 @@
 {
   "name": "dsh-harness-call",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Delegate work to external coding agents (Claude Code / Codex CLI / Grok CLI / Kimi CLI) from DeepSeek Harness: a model-facing harness_call tool, @claude/@codex/@grok/@kimi mentions, live progress cards with a thinking/tool timeline, and a details side panel.",
   "license": "MIT",
   "type": "module",
@@ -45,6 +45,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "test": "vitest run",
     "prepare": "pnpm build",
     "watch": "tsc -p tsconfig.json --watch --preserveWatchOutput & tsc -p tsconfig.client.json --watch --preserveWatchOutput & tsdown --watch"
   },
@@ -136,8 +137,8 @@
     "@deepseek-ai/dsh-client-ui-layout": "0.1.0-rc.6",
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.0-rc.6",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-settings": "0.1.0-rc.6",
     "@deepseek-ai/dsh-session": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings": "0.1.0-rc.6",
     "@deepseek-ai/dsh-subprocess": "0.1.0-rc.6",
     "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
@@ -150,7 +151,8 @@
     "lightningcss": "^1.33.0",
     "react": "^18.2.0",
     "tsdown": "0.22.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20"

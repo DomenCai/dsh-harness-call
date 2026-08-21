@@ -17,8 +17,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { JsonValue, ToolDefinition } from '@deepseek-ai/dsh-tools'
 // Declaration merges only: makes ctx.subprocess and ctx.tools visible.
 import type {} from '@deepseek-ai/dsh-subprocess'
-import type { HarnessEvent, RunMode } from '../shared/events.js'
-import { HARNESS_KEYS, HARNESS_LABELS } from '../shared/harness.js'
+import type { HarnessEvent, RunMode, StoredEvent } from '../shared/events.js'
+import { HARNESS_KEYS, HARNESS_LABELS, HARNESS_SESSION_NAMING } from '../shared/harness.js'
 import {
   ACCESS_MODES,
   EFFORT_LEVELS,
@@ -38,15 +38,8 @@ import { utf8ByteLength } from './truncate.js'
 /** Model-facing tool name; also the key the browser card renders against. */
 export const TOOL_NAME = 'harness_call'
 
-/**
- * How much of the timeline the model-facing result carries.
- *
- * The store keeps structured events for the browser, which can page and render
- * them; the tool result goes into the conversation, where an unbounded timeline
- * would cost more context than the reply it accompanies. So the result gets a
- * bounded tail of one-line digests, and `runId` for anything richer.
- */
-const RESULT_TIMELINE_EVENTS = 40
+/** Failure-only diagnostic tail carried by the model-facing result. */
+const FAILURE_TIMELINE_EVENTS = 15
 /** Per-line ceiling inside that tail. */
 const TIMELINE_LINE_CHARACTERS = 160
 /** Trailing stderr lines surfaced when a run failed. */
@@ -86,12 +79,6 @@ function describeEvent(event: HarnessEvent, seconds: number): string {
       return `${at} thinking ${brief(event.text, TIMELINE_LINE_CHARACTERS)}`
     case 'text':
       return `${at} text ${brief(event.text, TIMELINE_LINE_CHARACTERS)}`
-    case 'tool': {
-      const parts = [at, 'tool', event.name]
-      if (event.exitCode !== undefined) parts.push(`exit=${event.exitCode}`)
-      if (event.input !== undefined) parts.push(brief(event.input, TIMELINE_LINE_CHARACTERS))
-      return parts.join(' ')
-    }
     case 'tool_start': {
       const parts = [at, 'tool', event.name]
       if (event.input !== undefined) parts.push(brief(event.input, TIMELINE_LINE_CHARACTERS))
@@ -100,6 +87,7 @@ function describeEvent(event: HarnessEvent, seconds: number): string {
     case 'tool_finish': {
       const parts = [at, 'tool', event.name]
       if (event.exitCode !== undefined) parts.push(`exit=${event.exitCode}`)
+      else if (event.failed === true) parts.push('failed')
       if (event.output !== undefined) {
         const bytes = event.outputOriginalBytes ?? utf8ByteLength(event.output)
         parts.push(`output=${formatBytes(bytes)}`)
@@ -126,7 +114,13 @@ function describeEvent(event: HarnessEvent, seconds: number): string {
   }
 }
 
-/** Compact byte count for the model-facing digest (`5.4K`, `1.2M`). */
+/**
+ * Compact byte count for the model-facing digest (`5.4K`, `1.2M`).
+ *
+ * Deliberately separate from `formatBytes` in `src/client/activities.ts`, which
+ * spells out `16 KB` for a human reader. This one omits the space and the `B`
+ * because every character here is a prompt token.
+ */
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) {
@@ -135,6 +129,46 @@ function formatBytes(bytes: number): string {
   }
   const m = bytes / (1024 * 1024)
   return `${m >= 10 ? m.toFixed(0) : m.toFixed(1)}M`
+}
+
+/** Assemble the compact model-facing result independently of process orchestration. */
+export function buildModelResult(input: {
+  readonly ok: boolean
+  readonly runId: string
+  readonly mode: RunMode
+  readonly sessionId: string | null
+  readonly elapsedMs: number
+  readonly steps: number
+  readonly text: string
+  readonly costUsd?: number
+  readonly turns?: number
+  readonly errors: readonly string[]
+  readonly stderrTail: string
+  readonly events: readonly StoredEvent[]
+}): Record<string, JsonValue> {
+  const includeDiagnostics = !input.ok || input.text.trim() === ''
+  const result: Record<string, JsonValue> = {
+    ok: input.ok,
+    runId: input.runId,
+    mode: input.mode,
+    sessionId: input.sessionId,
+    elapsedMs: input.elapsedMs,
+    steps: input.steps,
+    text: input.text,
+  }
+  if (input.costUsd !== undefined) result['costUsd'] = input.costUsd
+  if (input.turns !== undefined) result['numTurns'] = input.turns
+  if (!includeDiagnostics) return result
+
+  if (!input.ok && input.errors.length > 0) result['errors'] = [...input.errors]
+  const stderr = input.stderrTail.trim()
+  if (!input.ok && stderr.length > 0) result['stderrTail'] = stderr.split('\n').slice(-STDERR_TAIL_LINES)
+  const timeline = input.events
+    .filter(event => event.kind !== 'text' && event.kind !== 'reasoning' && event.kind !== 'usage')
+    .slice(-FAILURE_TIMELINE_EVENTS)
+    .map(event => describeEvent(event, Math.round(event.at / 1000)))
+  if (timeline.length > 0) result['events'] = timeline
+  return result
 }
 
 /**
@@ -159,11 +193,11 @@ export const ROUTING_SECTION: string = [
 ].join('\n')
 
 const TOOL_DESCRIPTION: string = [
-  '调用外部 coding agent（Claude Code / Codex CLI / Grok CLI / Kimi CLI）执行一次独立提问或委托任务，返回其最终回复文本与过程摘要。',
-  'Call an external coding agent (Claude Code / Codex CLI / Grok CLI / Kimi CLI) with a self-contained prompt and return its final reply plus a process summary.',
+  '调用外部 coding agent（Claude Code / Codex CLI / Grok CLI / Kimi CLI）执行一次独立提问或委托任务，成功返回最终回复，失败附带诊断尾巴。',
+  'Call an external coding agent (Claude Code / Codex CLI / Grok CLI / Kimi CLI) with a self-contained prompt; successful calls return the final reply, while failures include a diagnostic tail.',
   'prompt 必须自包含：外部 agent 看不到当前对话 / The external agent sees nothing of the current conversation.',
   '会话策略：默认自动续接同一 harness 最近一次成功会话；newSession=true 强制新会话；传 sessionId 显式续接。同一步内多次 harness_call 并行执行；同一 harness 已有进行中的调用时，后续自动续接改为新开会话。/ Sessions auto-continue per harness by default; newSession=true forces a fresh one. Independent calls run in parallel; a second auto-continue to a busy harness opens a new session instead of sharing the live CLI conversation.',
-  '权限与思考档位以设置页为准；仅当对应项设为「模型决定」时才读 access / effort（或旧的 codexSandbox）。/ Access and effort come from Settings; pass access/effort only when that setting is "model decides".',
+  '权限与思考档位以设置页为准；仅当对应项设为「模型决定」时才读 access / effort。/ Access and effort come from Settings; pass access/effort only when that setting is "model decides".',
   'kimi 的 headless 模式没有权限开关，access 对 kimi 无效。/ kimi has no headless permission switch; access is ignored for kimi.',
   'timeoutSeconds 默认 900（60-3600）。cwd 默认当前工作区。',
 ].join(' ')
@@ -210,6 +244,7 @@ export function createHarnessCallTool(
   ctx: Context,
   store: RunStore,
   readSettings: () => HarnessCallSettings,
+  rawLogLimits: { readonly files: number, readonly bytes: number },
 ): ToolDefinition {
   const logger = ctx.logger('dsh-harness-call')
 
@@ -264,11 +299,6 @@ export function createHarnessCallTool(
         enum: EFFORT_LEVELS,
         description: '仅当设置页该项为「模型决定」时生效：low / medium / high / xhigh，kimi 仅支持 low / high / max / Only used when Settings effort is "model decides"; kimi accepts only low / high / max',
       },
-      codexSandbox: {
-        type: 'string',
-        enum: ACCESS_MODES,
-        description: 'access 的旧名，语义相同 / deprecated alias of access',
-      },
     },
     output: {
       schema: { type: 'json' },
@@ -294,22 +324,18 @@ export function createHarnessCallTool(
       const adapter = ADAPTERS[harness]
 
       if (args.prompt.trim().length === 0) {
-        return { ok: false, harness, label, errors: ['prompt must be a non-empty string'] }
+        return { ok: false, errors: ['prompt must be a non-empty string'] }
       }
       const cwd =
         typeof args.cwd === 'string' && args.cwd.trim().length > 0
           ? args.cwd
           : exec.agent?.session.header.cwd
       if (cwd === undefined || cwd.length === 0) {
-        return { ok: false, harness, label, errors: ['no cwd available: pass the cwd argument'] }
+        return { ok: false, errors: ['no cwd available: pass the cwd argument'] }
       }
 
       const timeoutSeconds = Math.min(3600, Math.max(60, Math.round(Number(args.timeoutSeconds) || 900)))
-      const accessOverride: AccessMode | undefined = isAccessMode(args.access)
-        ? args.access
-        : isAccessMode(args.codexSandbox)
-          ? args.codexSandbox
-          : undefined
+      const accessOverride: AccessMode | undefined = isAccessMode(args.access) ? args.access : undefined
       const effortOverride: EffortLevel | undefined = isEffortLevel(args.effort) ? args.effort : undefined
       const settings = readSettings()
       const policy = resolveRunPolicy(settings, harness, {
@@ -346,7 +372,7 @@ export function createHarnessCallTool(
           harness,
           label,
           mode,
-          sessionId,
+          sessionId: mode === 'new' && HARNESS_SESSION_NAMING[harness] === 'harness' ? null : sessionId,
           cwd,
           prompt: args.prompt,
           // The one reliable link from a still-running card back to ITS run: the
@@ -376,6 +402,8 @@ export function createHarnessCallTool(
             effort: policy.effort,
             timeoutSeconds,
             startedAt,
+            rawLogFiles: rawLogLimits.files,
+            rawLogBytes: rawLogLimits.bytes,
           })
           if (openedLog.capture !== undefined) {
             rawLog = openedLog.capture
@@ -632,38 +660,28 @@ export function createHarnessCallTool(
            */
           const detail = store.get(run.runId, 0)
           const steps = detail?.summary.eventCount ?? 0
-          const timeline = (detail?.events ?? [])
-            .slice(-RESULT_TIMELINE_EVENTS)
-            .map(event => describeEvent(event, Math.round(event.at / 1000)))
-
-          const stderrLines = stderrTail.trim()
+          const elapsedMs = Date.now() - startedAt
+          const result = buildModelResult({
+            ok,
+            runId: run.runId,
+            mode,
+            sessionId: finished.sessionId,
+            elapsedMs,
+            steps,
+            text: finished.text,
+            costUsd: finished.extras.costUsd,
+            turns: finished.extras.turns,
+            errors,
+            stderrTail,
+            events: detail?.events ?? [],
+          })
           await rawLog?.close({
             ok,
-            elapsedMs: Date.now() - startedAt,
+            elapsedMs,
             semanticEventCount: steps,
             captureError: rawLog.error ?? null,
           })
-          return {
-            ok,
-            // The handle back to the full structured timeline the store retains.
-            runId: run.runId,
-            harness,
-            label,
-            mode,
-            sessionId: finished.sessionId,
-            cwd,
-            elapsedMs: Date.now() - startedAt,
-            costUsd: finished.extras.costUsd ?? null,
-            numTurns: finished.extras.numTurns ?? null,
-            steps,
-            errors,
-            stderrTail:
-              errors.length > 0 && stderrLines.length > 0
-                ? stderrLines.split('\n').slice(-STDERR_TAIL_LINES)
-                : null,
-            events: timeline,
-            text: finished.text,
-          }
+          return result
         } catch (error) {
           // Settle the record, then answer in the failure shape: the caller gets a
           // reason instead of a thrown tool, and the store gets an evictable run
@@ -672,7 +690,7 @@ export function createHarnessCallTool(
           run.finish({ ok: false, text: '', sessionId: null, errors: [message], extras: {} })
           rawLog?.write('run.failed', { error: message, aborted: exec.signal.aborted })
           await rawLog?.close({ ok: false, elapsedMs: Date.now() - startedAt, captureError: rawLog.error ?? null })
-          return { ok: false, runId: run.runId, harness, label, mode, cwd, errors: [message] }
+          return { ok: false, runId: run.runId, mode, errors: [message] }
         }
       } finally {
         const left = (inflight.get(harness) ?? 1) - 1

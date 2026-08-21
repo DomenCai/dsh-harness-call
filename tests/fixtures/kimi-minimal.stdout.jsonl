@@ -1,0 +1,4 @@
+{"role":"assistant","content":"First response.","tool_calls":[{"id":"kimi-tool-1","type":"function","function":{"name":"Read","arguments":"{\"path\":\"README.md\"}"}}]}
+{"role":"tool","tool_call_id":"kimi-tool-1","content":"fixture output"}
+{"role":"assistant","content":"Final response."}
+{"role":"meta","type":"session.resume_hint","session_id":"kimi-session","content":"resume fixture"}

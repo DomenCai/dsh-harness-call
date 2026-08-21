@@ -25,6 +25,17 @@ export const HARNESS_LABELS: Readonly<Record<HarnessKey, string>> = {
   kimi: 'Kimi',
 }
 
+/**
+ * Who names a fresh session. Caller-named CLIs accept an explicit new id;
+ * harness-named CLIs publish the real id later in their output stream.
+ */
+export const HARNESS_SESSION_NAMING: Readonly<Record<HarnessKey, 'caller' | 'harness'>> = {
+  claude: 'caller',
+  codex: 'harness',
+  grok: 'caller',
+  kimi: 'harness',
+}
+
 /** Narrow an untrusted model-supplied value to a known harness key. */
 export function isHarnessKey(value: unknown): value is HarnessKey {
   return typeof value === 'string' && (HARNESS_KEYS as readonly string[]).includes(value)

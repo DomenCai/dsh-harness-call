@@ -1,0 +1,51 @@
+{
+  "events": [
+    {
+      "kind": "text",
+      "text": "First response."
+    },
+    {
+      "kind": "tool_start",
+      "callId": "kimi-tool-1",
+      "name": "Read",
+      "input": {
+        "path": "README.md"
+      }
+    },
+    {
+      "kind": "tool_finish",
+      "callId": "kimi-tool-1",
+      "name": "Read",
+      "output": "fixture output"
+    },
+    {
+      "kind": "text",
+      "text": "\n\nFinal response."
+    },
+    {
+      "kind": "session",
+      "sessionId": "kimi-session"
+    }
+  ],
+  "spawn": {
+    "argv": [
+      "-p",
+      {
+        "ref": "run.start.prompt"
+      },
+      "--output-format",
+      "stream-json"
+    ],
+    "stdin": null,
+    "env": {
+      "KIMI_MODEL_THINKING_EFFORT": "high"
+    }
+  },
+  "result": {
+    "ok": true,
+    "text": "First response.\n\nFinal response.",
+    "sessionId": "kimi-session",
+    "errors": [],
+    "extras": {}
+  }
+}

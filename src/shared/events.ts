@@ -26,12 +26,6 @@ export type HarnessEvent =
   /** Assistant-visible reply text (a delta, not the accumulated whole). */
   | { kind: 'text', text: string }
   /**
-   * A tool/command invocation in one shot. Kept for wire compatibility with
-   * events already stored or in flight; new adapters emit
-   * {@link HarnessEvent tool_start} / {@link HarnessEvent tool_finish} instead.
-   */
-  | { kind: 'tool', name: string, input?: unknown, exitCode?: number }
-  /**
    * A tool/command has been invoked. `callId` is the harness-native id (never
    * synthesized): the client projects start/finish into one card by this key.
    */
@@ -49,9 +43,16 @@ export type HarnessEvent =
       output?: string
       outputTruncated?: boolean
       outputOriginalBytes?: number
+      /** Real process exit code, only when the harness reports a number. */
       exitCode?: number
+      /** The harness explicitly reported this invocation as failed. */
+      failed?: true
     }
-  /** A workspace file the harness created, edited, or deleted. */
+  /**
+   * A workspace file the harness created, edited, or deleted. Codex emits this
+   * because its protocol reports file changes outside tool calls; other harnesses
+   * already represent edits as tools, so synthesizing this would double-report.
+   */
   | { kind: 'file', path: string, change: 'create' | 'edit' | 'delete' }
   /** A run-level error the harness reported (not necessarily fatal). */
   | { kind: 'error', message: string }

@@ -16,7 +16,7 @@
 import { HARNESS_LABELS } from '../../shared/harness.js'
 import type { HarnessEvent } from '../../shared/events.js'
 import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.js'
-import { exitFailure, isRecord, missingCallId, readNumber, readRecord, readString, toolOutputText } from './native.js'
+import { exitFailure, hasDefined, isRecord, missingCallId, readNumber, readRecord, readString, toolOutputText } from './native.js'
 
 /**
  * Grok streams the reply as `text` deltas and reasoning as per-token `thought`
@@ -35,6 +35,8 @@ export interface GrokState extends RunState {
    * of its own) can be attributed to the tool the `tool_call` announced.
    */
   tools: Map<string, string>
+  /** A tool frame occurred since the last visible text delta. */
+  sawToolSinceText?: boolean
 }
 
 export const grokAdapter: HarnessAdapter<GrokState> = {
@@ -84,9 +86,12 @@ export const grokAdapter: HarnessAdapter<GrokState> = {
     if (type === 'text') {
       const text = readString(native, 'data')
       if (text !== undefined) {
-        // Grok's text frames are deltas, so they accumulate.
-        state.text += text
-        return [{ kind: 'text', text }]
+        // Grok's text frames are deltas. When text resumes after tool work, the
+        // exact separator rides in the delta so live and final text stay equal.
+        const piece = state.text !== '' && state.sawToolSinceText === true ? `\n\n${text}` : text
+        state.text += piece
+        state.sawToolSinceText = false
+        return [{ kind: 'text', text: piece }]
       }
     } else if (type === 'thought') {
       /*
@@ -111,6 +116,7 @@ export const grokAdapter: HarnessAdapter<GrokState> = {
        */
       return []
     } else if (type === 'tool_call') {
+      state.sawToolSinceText = true
       /*
        * Frame shape (observed on grok's streaming-json):
        * `{"type":"tool_call","toolCallId":"call-…","title":"read_file",
@@ -129,6 +135,7 @@ export const grokAdapter: HarnessAdapter<GrokState> = {
         ? { kind: 'tool_start', callId, name }
         : { kind: 'tool_start', callId, name, input }]
     } else if (type === 'tool_call_update') {
+      state.sawToolSinceText = true
       /*
        * The settlement half of a tool call. Updates with `status: null` /
        * `in_progress` carry only locations/progress and are dropped; a
@@ -147,7 +154,7 @@ export const grokAdapter: HarnessAdapter<GrokState> = {
         callId,
         name,
         ...(output !== undefined ? { output } : {}),
-        exitCode: status === 'completed' ? 0 : 1,
+        ...(status === 'failed' ? { failed: true as const } : {}),
       }]
     } else if (type === 'usage') {
       /*
@@ -208,7 +215,7 @@ export const grokAdapter: HarnessAdapter<GrokState> = {
       // The closing frame accounts for the run: `"num_turns":1,
       // "total_cost_usd":0.00649026`. Reading it is what makes the card's cost
       // and turn lines say anything at all for this harness.
-      extras: extrasFrom(grokEndUsage(state.end)),
+      extras: grokEndUsage(state.end),
     }
   },
 }
@@ -281,28 +288,4 @@ function grokEndUsage(native: Record<string, unknown> | undefined): {
     ...nested,
     model: grokModel(native) ?? nested.model,
   }
-}
-
-function extrasFrom(usage: {
-  costUsd?: number
-  turns?: number
-  inputTokens?: number
-  outputTokens?: number
-  cachedTokens?: number
-  reasoningTokens?: number
-  model?: string
-}): RunResult['extras'] {
-  return {
-    costUsd: usage.costUsd,
-    numTurns: usage.turns,
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
-    cachedTokens: usage.cachedTokens,
-    reasoningTokens: usage.reasoningTokens,
-    model: usage.model,
-  }
-}
-
-function hasDefined(value: Record<string, unknown>): boolean {
-  return Object.values(value).some(entry => entry !== undefined)
 }

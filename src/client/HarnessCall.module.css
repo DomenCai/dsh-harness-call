@@ -240,14 +240,61 @@
   opacity: 0.6;
 }
 
+.promptSection {
+  margin-bottom: 12px;
+}
+
+.promptHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.promptHead .sectionLabel {
+  margin-bottom: 6px;
+}
+
+.promptToggle {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
 .prompt {
-  margin-top: 6px;
   padding: 8px 10px;
   border: 1px dashed color-mix(in srgb, currentColor 25%, transparent);
   border-radius: 8px;
   font-size: 12px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   opacity: 0.8;
+}
+
+.promptCollapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.transcriptText {
+  min-width: 0;
+}
+
+.authoritativeReply {
+  margin-top: 12px;
 }
 
 /* The dropped-event notice is deliberately loud: a timeline that quietly
@@ -381,6 +428,11 @@
 
 .process {
   margin: 0;
+  min-width: 0;
+}
+
+.process[open] {
+  padding-bottom: 2px;
 }
 
 .process > summary {

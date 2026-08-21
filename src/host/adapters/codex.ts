@@ -12,7 +12,7 @@
 import { HARNESS_LABELS } from '../../shared/harness.js'
 import type { HarnessEvent } from '../../shared/events.js'
 import type { HarnessAdapter, Outcome, RunInfo, RunRequest, RunResult, RunState, SpawnSpec } from '../adapter.js'
-import { exitFailure, isRecord, missingCallId, readNumber, readRecord, readString } from './native.js'
+import { exitFailure, hasDefined, isRecord, missingCallId, readNumber, readRecord, readString } from './native.js'
 
 /** Longest failure message folded into {@link RunResult.errors}. */
 const MAX_ERROR_CHARACTERS = 160
@@ -287,13 +287,14 @@ function toolFinishFromItem(state: CodexState, item: Record<string, unknown>, fa
     ? readString(item, 'aggregated_output')
     : (readString(item, 'output') ?? readString(item, 'aggregated_output'))
   const exitCode = readNumber(item, 'exit_code')
-    ?? (readString(item, 'status') === 'failed' ? 1 : 0)
+  const failed = (exitCode !== undefined && exitCode !== 0) || readString(item, 'status') === 'failed'
   const finish: HarnessEvent = {
     kind: 'tool_finish',
     callId,
     name,
     ...(output !== undefined ? { output } : {}),
-    exitCode,
+    ...(exitCode !== undefined ? { exitCode } : {}),
+    ...(failed ? { failed: true as const } : {}),
   }
   if (state.started.has(callId)) return [finish]
   const input = fallbackName === 'command_execution'
@@ -323,10 +324,6 @@ function readCodexUsage(source: Record<string, unknown> | undefined, native: Rec
     reasoningTokens: readNumber(from, 'reasoning_output_tokens') ?? readNumber(from, 'reasoning_tokens'),
     model: readString(from, 'model') ?? readString(native, 'model'),
   }
-}
-
-function hasDefined(value: Record<string, unknown>): boolean {
-  return Object.values(value).some(entry => entry !== undefined)
 }
 
 /**

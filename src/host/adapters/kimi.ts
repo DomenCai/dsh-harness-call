@@ -127,8 +127,8 @@ export const kimiAdapter: HarnessAdapter<KimiState> = {
     if (role === 'tool') {
       /*
        * The settlement half of a tool call. kimi's frame carries the output
-       * but no status and no name; reaching it at all means the call finished,
-       * so the exit code is 0, attributed through the id→name table.
+       * but no status and no name, so it proves completion but not success or
+       * failure. Neither `exitCode` nor `failed` is synthesized.
        */
       const callId = readString(native, 'tool_call_id')
       const name = (callId !== undefined ? state.tools.get(callId) : undefined) ?? 'tool'
@@ -139,7 +139,6 @@ export const kimiAdapter: HarnessAdapter<KimiState> = {
         callId,
         name,
         ...(output !== undefined ? { output } : {}),
-        exitCode: 0,
       }]
     }
 

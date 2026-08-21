@@ -105,7 +105,7 @@ export interface RunResult {
   /** Optional accounting the harness reported. */
   readonly extras: {
     readonly costUsd?: number
-    readonly numTurns?: number
+    readonly turns?: number
     readonly inputTokens?: number
     readonly outputTokens?: number
     readonly cachedTokens?: number

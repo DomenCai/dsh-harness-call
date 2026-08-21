@@ -251,6 +251,64 @@ export function matchRun(
   })
 }
 
+/**
+ * How an unsettled tool card should present a roster hit.
+ *
+ * DSH may delay writing the tool-result block so parallel calls stay in
+ * model order. The host store is already `done` then; only an *exact*
+ * `callId` match in that phase is treated as host-complete. A guessed hit
+ * stays live, and elapsed for host-complete is frozen: `elapsedMs`, or
+ * `finishedAt - startedAt` when that is all the roster has — never `now`.
+ */
+export type UnsettledCardState =
+  | { kind: 'starting' }
+  | { kind: 'running'; elapsedMs: number; eventCount: number }
+  | {
+      kind: 'hostDone'
+      ok: boolean
+      elapsedMs: number | undefined
+      eventCount: number
+      sessionId: string | null
+      errors: readonly string[]
+    }
+
+/**
+ * @param summary - roster row {@link matchRun} returned, if any.
+ * @param callId - the tool call this card was rendered for.
+ * @param now - wall clock used only while the host run is still live.
+ */
+export function unsettledCardState(
+  summary: RunSummary | undefined,
+  callId: string,
+  now: number,
+): UnsettledCardState {
+  if (summary !== undefined && summary.callId === callId && summary.phase === 'done') {
+    return {
+      kind: 'hostDone',
+      ok: summary.ok === true,
+      elapsedMs: frozenElapsedMs(summary),
+      eventCount: summary.eventCount,
+      sessionId: summary.sessionId,
+      errors: summary.errors,
+    }
+  }
+  if (summary === undefined || summary.phase === 'starting') {
+    return { kind: 'starting' }
+  }
+  return {
+    kind: 'running',
+    elapsedMs: now - summary.startedAt,
+    eventCount: summary.eventCount,
+  }
+}
+
+/** Finished duration from the roster itself, never wall-clock `now`. */
+function frozenElapsedMs(summary: RunSummary): number | undefined {
+  if (summary.elapsedMs !== undefined) return summary.elapsedMs
+  if (summary.finishedAt !== undefined) return Math.max(0, summary.finishedAt - summary.startedAt)
+  return undefined
+}
+
 /** One run as the panel sees it: the live summary plus the accumulated timeline. */
 export interface RunView {
   summary: RunSummary
@@ -445,10 +503,8 @@ export interface HarnessResult {
   ok: boolean
   /** The handle to the host's structured timeline; absent on early-exit results. */
   runId: string | undefined
-  label: string | undefined
   mode: string | undefined
   sessionId: string | undefined
-  cwd: string | undefined
   elapsedMs: number | undefined
   /** How many events the run produced, as counted by the host. */
   steps: number | undefined
@@ -498,10 +554,8 @@ export function readResult(block: ToolCallBlock): HarnessResult | undefined {
   return {
     ok: value.ok === true,
     runId: asText(value.runId),
-    label: asText(value.label),
     mode: asText(value.mode),
     sessionId: asText(value.sessionId),
-    cwd: asText(value.cwd),
     elapsedMs: asNumber(value.elapsedMs),
     steps: asNumber(value.steps),
     costUsd: asNumber(value.costUsd),

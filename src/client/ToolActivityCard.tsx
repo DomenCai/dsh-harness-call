@@ -50,6 +50,7 @@ function tail(activity: ToolActivity, t: HarnessTranslate): string {
   const duration = durationOf(activity)
   if (duration !== undefined) bits.push(duration)
   if (activity.exitCode !== undefined) bits.push(t('event.exit', { code: activity.exitCode }))
+  else if (activity.status === 'failed') bits.push(t('event.failed'))
   if (activity.status === 'running') bits.push(t('activity.running'))
   return bits.join(' · ')
 }

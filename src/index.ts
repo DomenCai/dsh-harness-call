@@ -42,7 +42,7 @@ export const inject = ['subprocess', 'tools', 'systemPrompt', 'typert', 'setting
  * Every field is a retention bound. They are configuration rather than
  * constants because the right ceiling depends on the deployment: a long-lived
  * shared session wants tighter bounds than a short local one, and the cost of
- * getting it wrong is unbounded memory in the host process.
+ * getting it wrong is unbounded host memory or diagnostic disk usage.
  */
 export interface Config {
   /**
@@ -54,6 +54,10 @@ export interface Config {
   maxRuns: number
   /** Characters of each prompt kept for the browser's preview line. */
   promptPreviewCharacters: number
+  /** Retained raw-log files, including captures currently being written. */
+  rawLogFiles: number
+  /** Ordinary-record byte budget per raw-log file; terminal markers are extra. */
+  rawLogBytes: number
 }
 
 /*
@@ -62,13 +66,15 @@ export interface Config {
  * every event on the append that created it, so no timeline ever exists;
  * `maxRuns: 0` deletes each run the instant it finishes, so the browser can
  * never poll a settled card; `promptPreviewCharacters: 0` leaves a card with
- * nothing but an ellipsis. A configuration that can only silently disable the
- * plugin is a misconfiguration, so the schema rejects it instead.
+ * nothing but an ellipsis; zero raw-log files or bytes cannot hold the required
+ * header. A configuration that silently disables a feature is rejected.
  */
 export const Config: z<Config> = z.object({
   maxEventsPerRun: z.natural().min(1).default(400).description('Events retained per run before the ring buffer evicts.'),
   maxRuns: z.natural().min(1).default(50).description('Runs retained before the oldest finished one is discarded.'),
   promptPreviewCharacters: z.natural().min(1).default(280).description('Characters of each prompt kept for the browser preview.'),
+  rawLogFiles: z.natural().min(1).default(200).description('Raw log files retained, including active captures.'),
+  rawLogBytes: z.natural().min(1).default(33_554_432).description('Ordinary-record bytes allowed per raw log file.'),
 })
 
 export function apply(ctx: Context, config: Config): void {
@@ -96,7 +102,10 @@ export function apply(ctx: Context, config: Config): void {
   }, `${PACKAGE_NAME}: typert manifest`)
 
   ctx.effect(
-    () => ctx.tools.register(createHarnessCallTool(ctx, store, readSettings)),
+    () => ctx.tools.register(createHarnessCallTool(ctx, store, readSettings, {
+      files: config.rawLogFiles,
+      bytes: config.rawLogBytes,
+    })),
     `${PACKAGE_NAME}: harness_call tool`,
   )
 }
